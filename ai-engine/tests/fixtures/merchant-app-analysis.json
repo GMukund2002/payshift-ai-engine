@@ -1,0 +1,284 @@
+{
+  "repositoryPath" : "/Users/ddavuluri/Desktop/Personal/PayShift AI/sample-apps/merchant-app",
+  "dependencies" : [ {
+    "groupId" : "org.springframework.boot",
+    "artifactId" : "spring-boot-starter-web",
+    "version" : null
+  }, {
+    "groupId" : "org.springframework.boot",
+    "artifactId" : "spring-boot-starter-data-jpa",
+    "version" : null
+  }, {
+    "groupId" : "org.springframework.boot",
+    "artifactId" : "spring-boot-starter-validation",
+    "version" : null
+  }, {
+    "groupId" : "com.h2database",
+    "artifactId" : "h2",
+    "version" : null
+  }, {
+    "groupId" : "com.stripe",
+    "artifactId" : "stripe-java",
+    "version" : "${stripe.version}"
+  }, {
+    "groupId" : "org.springframework.boot",
+    "artifactId" : "spring-boot-starter-test",
+    "version" : null
+  } ],
+  "detectedProviders" : [ {
+    "name" : "stripe",
+    "confidence" : "HIGH",
+    "evidence" : [ "sdk_import: com.stripe.exception.StripeException (src/main/java/com/payshift/merchant/provider/StripeApiPaymentGateway.java)", "sdk_import: com.stripe.model.PaymentIntent (src/main/java/com/payshift/merchant/provider/StripeApiPaymentGateway.java)", "sdk_import: com.stripe.model.Refund (src/main/java/com/payshift/merchant/provider/StripeApiPaymentGateway.java)", "sdk_import: com.stripe.param.PaymentIntentCreateParams (src/main/java/com/payshift/merchant/provider/StripeApiPaymentGateway.java)", "sdk_import: com.stripe.param.RefundCreateParams (src/main/java/com/payshift/merchant/provider/StripeApiPaymentGateway.java)", "sdk_import: com.stripe.model.Event (src/main/java/com/payshift/merchant/controller/WebhookController.java)", "sdk_import: com.stripe.exception.SignatureVerificationException (src/main/java/com/payshift/merchant/service/WebhookService.java)", "sdk_import: com.stripe.model.Event (src/main/java/com/payshift/merchant/service/WebhookService.java)", "sdk_import: com.stripe.net.Webhook (src/main/java/com/payshift/merchant/service/WebhookService.java)", "maven_dependency: com.stripe:stripe-java:${stripe.version}" ]
+  } ],
+  "paymentClasses" : [ {
+    "file" : "src/test/java/com/payshift/merchant/support/StripeWebhookTestSupport.java",
+    "className" : "StripeWebhookTestSupport",
+    "role" : "WEBHOOK_HANDLER",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/test/java/com/payshift/merchant/PaymentFlowIntegrationTest.java",
+    "className" : "PaymentFlowIntegrationTest",
+    "role" : "OTHER",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/test/java/com/payshift/merchant/WebhookIntegrationTest.java",
+    "className" : "WebhookIntegrationTest",
+    "role" : "WEBHOOK_HANDLER",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/repository/ProcessedWebhookEventRepository.java",
+    "className" : "ProcessedWebhookEventRepository",
+    "role" : "REPOSITORY",
+    "isInterface" : true,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/repository/RefundRepository.java",
+    "className" : "RefundRepository",
+    "role" : "REPOSITORY",
+    "isInterface" : true,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/repository/PaymentRepository.java",
+    "className" : "PaymentRepository",
+    "role" : "REPOSITORY",
+    "isInterface" : true,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/provider/StripePaymentGateway.java",
+    "className" : "StripePaymentGateway",
+    "role" : "PROVIDER_GATEWAY",
+    "isInterface" : true,
+    "implementedBy" : [ "StripeApiPaymentGateway" ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/provider/ProviderCallException.java",
+    "className" : "ProviderCallException",
+    "role" : "OTHER",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/provider/StripeApiPaymentGateway.java",
+    "className" : "StripeApiPaymentGateway",
+    "role" : "PROVIDER_GATEWAY",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ "StripePaymentGateway" ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/controller/WebhookController.java",
+    "className" : "WebhookController",
+    "role" : "CONTROLLER",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/controller/GlobalExceptionHandler.java",
+    "className" : "GlobalExceptionHandler",
+    "role" : "OTHER",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/controller/PaymentController.java",
+    "className" : "PaymentController",
+    "role" : "CONTROLLER",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/service/PaymentNotFoundException.java",
+    "className" : "PaymentNotFoundException",
+    "role" : "OTHER",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/service/WebhookService.java",
+    "className" : "WebhookService",
+    "role" : "SERVICE",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/service/PaymentService.java",
+    "className" : "PaymentService",
+    "role" : "SERVICE",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/service/InvalidRefundException.java",
+    "className" : "InvalidRefundException",
+    "role" : "OTHER",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/service/InvalidWebhookSignatureException.java",
+    "className" : "InvalidWebhookSignatureException",
+    "role" : "WEBHOOK_HANDLER",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/domain/Payment.java",
+    "className" : "Payment",
+    "role" : "DOMAIN",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/domain/ProcessedWebhookEvent.java",
+    "className" : "ProcessedWebhookEvent",
+    "role" : "DOMAIN",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  }, {
+    "file" : "src/main/java/com/payshift/merchant/domain/Refund.java",
+    "className" : "Refund",
+    "role" : "DOMAIN",
+    "isInterface" : false,
+    "implementedBy" : [ ],
+    "implementsInterfaces" : [ ]
+  } ],
+  "paymentOperations" : [ {
+    "operation" : "HANDLE_WEBHOOK",
+    "sourceFile" : "src/test/java/com/payshift/merchant/WebhookIntegrationTest.java",
+    "className" : "WebhookIntegrationTest",
+    "method" : "validWebhook_marksPaymentSucceeded_andFulfillsOrderExactlyOnce",
+    "provider" : "stripe"
+  }, {
+    "operation" : "CREATE_PAYMENT",
+    "sourceFile" : "src/main/java/com/payshift/merchant/provider/StripePaymentGateway.java",
+    "className" : "StripePaymentGateway",
+    "method" : "createPaymentIntent",
+    "provider" : null
+  }, {
+    "operation" : "CREATE_REFUND",
+    "sourceFile" : "src/main/java/com/payshift/merchant/provider/StripePaymentGateway.java",
+    "className" : "StripePaymentGateway",
+    "method" : "createRefund",
+    "provider" : null
+  }, {
+    "operation" : "CREATE_PAYMENT",
+    "sourceFile" : "src/main/java/com/payshift/merchant/provider/StripeApiPaymentGateway.java",
+    "className" : "StripeApiPaymentGateway",
+    "method" : "createPaymentIntent",
+    "provider" : "stripe"
+  }, {
+    "operation" : "CREATE_REFUND",
+    "sourceFile" : "src/main/java/com/payshift/merchant/provider/StripeApiPaymentGateway.java",
+    "className" : "StripeApiPaymentGateway",
+    "method" : "createRefund",
+    "provider" : "stripe"
+  }, {
+    "operation" : "HANDLE_WEBHOOK",
+    "sourceFile" : "src/main/java/com/payshift/merchant/controller/WebhookController.java",
+    "className" : "WebhookController",
+    "method" : "handleStripeWebhook",
+    "provider" : null
+  }, {
+    "operation" : "CREATE_PAYMENT",
+    "sourceFile" : "src/main/java/com/payshift/merchant/controller/PaymentController.java",
+    "className" : "PaymentController",
+    "method" : "createPayment",
+    "provider" : null
+  }, {
+    "operation" : "GET_PAYMENT_STATUS",
+    "sourceFile" : "src/main/java/com/payshift/merchant/controller/PaymentController.java",
+    "className" : "PaymentController",
+    "method" : "getPaymentStatus",
+    "provider" : null
+  }, {
+    "operation" : "CREATE_REFUND",
+    "sourceFile" : "src/main/java/com/payshift/merchant/controller/PaymentController.java",
+    "className" : "PaymentController",
+    "method" : "refundPayment",
+    "provider" : null
+  }, {
+    "operation" : "VERIFY_WEBHOOK_SIGNATURE",
+    "sourceFile" : "src/main/java/com/payshift/merchant/service/WebhookService.java",
+    "className" : "WebhookService",
+    "method" : "verifySignature",
+    "provider" : "stripe"
+  }, {
+    "operation" : "HANDLE_WEBHOOK",
+    "sourceFile" : "src/main/java/com/payshift/merchant/service/WebhookService.java",
+    "className" : "WebhookService",
+    "method" : "processEvent",
+    "provider" : "stripe"
+  }, {
+    "operation" : "FULFILL_ORDER",
+    "sourceFile" : "src/main/java/com/payshift/merchant/service/OrderFulfillmentService.java",
+    "className" : "OrderFulfillmentService",
+    "method" : "fulfill",
+    "provider" : null
+  }, {
+    "operation" : "CREATE_PAYMENT",
+    "sourceFile" : "src/main/java/com/payshift/merchant/service/PaymentService.java",
+    "className" : "PaymentService",
+    "method" : "createPayment",
+    "provider" : "stripe"
+  }, {
+    "operation" : "CREATE_REFUND",
+    "sourceFile" : "src/main/java/com/payshift/merchant/service/PaymentService.java",
+    "className" : "PaymentService",
+    "method" : "refund",
+    "provider" : "stripe"
+  }, {
+    "operation" : "FULFILL_ORDER",
+    "sourceFile" : "src/main/java/com/payshift/merchant/domain/Order.java",
+    "className" : "Order",
+    "method" : "markFulfilled",
+    "provider" : null
+  }, {
+    "operation" : "GET_PAYMENT_STATUS",
+    "sourceFile" : "src/main/java/com/payshift/merchant/domain/Payment.java",
+    "className" : "Payment",
+    "method" : "getStatus",
+    "provider" : null
+  }, {
+    "operation" : "CREATE_REFUND",
+    "sourceFile" : "src/main/java/com/payshift/merchant/domain/Payment.java",
+    "className" : "Payment",
+    "method" : "applyRefund",
+    "provider" : null
+  } ],
+  "architecture" : {
+    "providerAbstractionExists" : true,
+    "multipleProvidersSupported" : false,
+    "abstractionInterfaces" : [ "StripePaymentGateway (src/main/java/com/payshift/merchant/provider/StripePaymentGateway.java)" ],
+    "warnings" : [ ]
+  },
+  "errors" : [ ]
+}

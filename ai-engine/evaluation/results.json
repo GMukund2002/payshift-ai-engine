@@ -1,0 +1,84 @@
+{
+  "generated_at": "2026-11-05T03:31:27Z",
+  "duration_seconds": 24.59,
+  "rows": [
+    {
+      "condition": "payshift",
+      "sample_variant": "merchant-app",
+      "detection_precision": 1.0,
+      "detection_recall": 1.0,
+      "operation_recall": 1.0,
+      "documentation_retrieval_relevant": true,
+      "compilation_success": true,
+      "test_pass_rate": 1.0,
+      "repair_attempts_used": 0,
+      "self_repair_succeeded": null,
+      "notes": "ADD_PSP(razorpay) verification using hand-validated generated files (11 tests)"
+    },
+    {
+      "condition": "baseline",
+      "sample_variant": "merchant-app",
+      "detection_precision": null,
+      "detection_recall": null,
+      "operation_recall": null,
+      "documentation_retrieval_relevant": null,
+      "compilation_success": null,
+      "test_pass_rate": null,
+      "repair_attempts_used": null,
+      "self_repair_succeeded": null,
+      "notes": "Not measured: no LLM provider is configured in this environment. Baseline = a direct LLM code-generation prompt with no repository analysis, RAG, or verification loop. Re-run with OPENAI_API_KEY/ANTHROPIC_API_KEY set for a real comparison; this row is intentionally left unmeasured rather than estimated."
+    },
+    {
+      "condition": "payshift",
+      "sample_variant": "tightly-coupled-fixture",
+      "detection_precision": 1.0,
+      "detection_recall": 1.0,
+      "operation_recall": 1.0,
+      "documentation_retrieval_relevant": true,
+      "compilation_success": null,
+      "test_pass_rate": null,
+      "repair_attempts_used": null,
+      "self_repair_succeeded": null,
+      "notes": "Detection-only fixture (not a full compilable Maven project)"
+    },
+    {
+      "condition": "baseline",
+      "sample_variant": "tightly-coupled-fixture",
+      "detection_precision": null,
+      "detection_recall": null,
+      "operation_recall": null,
+      "documentation_retrieval_relevant": null,
+      "compilation_success": null,
+      "test_pass_rate": null,
+      "repair_attempts_used": null,
+      "self_repair_succeeded": null,
+      "notes": "Not measured: no LLM provider is configured in this environment. Baseline = a direct LLM code-generation prompt with no repository analysis, RAG, or verification loop. Re-run with OPENAI_API_KEY/ANTHROPIC_API_KEY set for a real comparison; this row is intentionally left unmeasured rather than estimated."
+    },
+    {
+      "condition": "payshift",
+      "sample_variant": "abstracted-fixture",
+      "detection_precision": 1.0,
+      "detection_recall": 1.0,
+      "operation_recall": 1.0,
+      "documentation_retrieval_relevant": true,
+      "compilation_success": null,
+      "test_pass_rate": null,
+      "repair_attempts_used": null,
+      "self_repair_succeeded": null,
+      "notes": "Detection-only fixture (not a full compilable Maven project)"
+    },
+    {
+      "condition": "baseline",
+      "sample_variant": "abstracted-fixture",
+      "detection_precision": null,
+      "detection_recall": null,
+      "operation_recall": null,
+      "documentation_retrieval_relevant": null,
+      "compilation_success": null,
+      "test_pass_rate": null,
+      "repair_attempts_used": null,
+      "self_repair_succeeded": null,
+      "notes": "Not measured: no LLM provider is configured in this environment. Baseline = a direct LLM code-generation prompt with no repository analysis, RAG, or verification loop. Re-run with OPENAI_API_KEY/ANTHROPIC_API_KEY set for a real comparison; this row is intentionally left unmeasured rather than estimated."
+    }
+  ]
+}
