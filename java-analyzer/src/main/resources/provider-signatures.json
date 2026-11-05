@@ -1,0 +1,60 @@
+{
+  "providers": [
+    {
+      "id": "stripe",
+      "displayName": "Stripe",
+      "mavenGroupIds": ["com.stripe"],
+      "importPrefixes": ["com.stripe."],
+      "classNameHints": ["Stripe", "PaymentIntent", "StripeException", "SetupIntent", "StripeObject"],
+      "apiDomains": ["api.stripe.com"]
+    },
+    {
+      "id": "razorpay",
+      "displayName": "Razorpay",
+      "mavenGroupIds": ["com.razorpay"],
+      "importPrefixes": ["com.razorpay."],
+      "classNameHints": ["Razorpay", "RazorpayClient", "RazorpayException"],
+      "apiDomains": ["api.razorpay.com"]
+    },
+    {
+      "id": "adyen",
+      "displayName": "Adyen",
+      "mavenGroupIds": ["com.adyen"],
+      "importPrefixes": ["com.adyen."],
+      "classNameHints": ["Adyen", "AdyenClient", "CheckoutApi"],
+      "apiDomains": ["checkout-test.adyen.com", "checkout.adyen.com"]
+    },
+    {
+      "id": "paypal",
+      "displayName": "PayPal",
+      "mavenGroupIds": ["com.paypal.sdk", "com.paypal.checkout.sdk", "com.braintreegateway"],
+      "importPrefixes": ["com.paypal.", "com.braintreegateway."],
+      "classNameHints": ["PayPal", "PayPalClient", "BraintreeGateway"],
+      "apiDomains": ["api-m.paypal.com", "api-m.sandbox.paypal.com"]
+    },
+    {
+      "id": "cashfree",
+      "displayName": "Cashfree",
+      "mavenGroupIds": ["com.cashfree.pg"],
+      "importPrefixes": ["com.cashfree."],
+      "classNameHints": ["Cashfree", "CFPaymentGateway"],
+      "apiDomains": ["api.cashfree.com"]
+    },
+    {
+      "id": "square",
+      "displayName": "Square",
+      "mavenGroupIds": ["com.squareup"],
+      "importPrefixes": ["com.squareup."],
+      "classNameHints": ["SquareClient", "SquareApi"],
+      "apiDomains": ["connect.squareup.com"]
+    },
+    {
+      "id": "braintree",
+      "displayName": "Braintree",
+      "mavenGroupIds": ["com.braintreepayments"],
+      "importPrefixes": ["com.braintreepayments."],
+      "classNameHints": ["BraintreeGateway", "Braintree"],
+      "apiDomains": ["api.braintreegateway.com"]
+    }
+  ]
+}
