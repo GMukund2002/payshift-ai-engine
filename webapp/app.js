@@ -11,6 +11,11 @@ const state = {
 
 function $(id) { return document.getElementById(id); }
 
+function getDemoKey() {
+  try { return localStorage.getItem("payshift_demo_key") || null; }
+  catch (e) { return null; } // private browsing / blocked storage -- fall through to the 401 prompt
+}
+
 async function waitForBackend() {
   const msg = $("boot-message");
   const started = Date.now();
@@ -127,11 +132,37 @@ async function runPipeline() {
   $("results-card").style.display = "none";
   $("node-list").innerHTML = "";
 
-  const res = await fetch("/api/run", {
+  const headers = { "Content-Type": "application/json" };
+  const demoKey = getDemoKey();
+  if (demoKey) headers["X-Demo-Key"] = demoKey;
+
+  let res = await fetch("/api/run", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ repo_path: state.repoPath, operation_mode: mode, target_provider: target, target_provider_doc_url: docUrl }),
   });
+
+  if (res.status === 401) {
+    // This deploy requires a demo access key (set via DEMO_ACCESS_KEY) that
+    // we either don't have yet or got wrong -- ask once, remember it for
+    // next time, and retry rather than failing silently.
+    const entered = prompt("This deployment requires a demo access key to run the pipeline (ask whoever deployed it). Enter it:");
+    if (!entered) { $("run-btn").disabled = false; $("progress-card").style.display = "none"; return; }
+    localStorage.setItem("payshift_demo_key", entered);
+    headers["X-Demo-Key"] = entered;
+    res = await fetch("/api/run", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ repo_path: state.repoPath, operation_mode: mode, target_provider: target, target_provider_doc_url: docUrl }),
+    });
+    if (res.status === 401) {
+      alert("That key was rejected too. Double-check the DEMO_ACCESS_KEY value set on the deployment.");
+      localStorage.removeItem("payshift_demo_key");
+      $("run-btn").disabled = false;
+      $("progress-card").style.display = "none";
+      return;
+    }
+  }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
