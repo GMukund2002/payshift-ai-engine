@@ -5,6 +5,7 @@ real subprocesses and parse real output.
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 import time
 import xml.etree.ElementTree as ET
@@ -19,17 +20,26 @@ REPO_ROOT = AI_ENGINE_ROOT.parent
 MAVEN_SETTINGS = REPO_ROOT / "settings.xml"
 MAVEN_BUILD_TIMEOUT_SECONDS = 300
 
+# A capped heap for Maven/Surefire's own JVM. Found necessary running this for
+# real on Render's free tier: Maven's JVM plus a forked Surefire JVM plus the
+# Python/Uvicorn process all at once can exceed the container's small memory
+# budget and get OOM-killed mid-run -- not a bug in this code, a real resource
+# constraint of a free-tier deploy running an actual JVM build as part of
+# request handling. Overridable via a real MAVEN_OPTS in the environment.
+DEFAULT_MAVEN_OPTS = "-Xmx256m"
+
 
 def _run_maven(project_dir: Path, goals: list[str], timeout_seconds: int) -> tuple[int, str, float]:
     cmd = ["mvn"]
     if MAVEN_SETTINGS.exists():
         cmd += ["-s", str(MAVEN_SETTINGS)]
     cmd += goals
-    logger.info("Running in %s: %s", project_dir, " ".join(cmd))
+    env = {**os.environ, "MAVEN_OPTS": os.environ.get("MAVEN_OPTS", DEFAULT_MAVEN_OPTS)}
+    logger.info("Running in %s: %s (MAVEN_OPTS=%s)", project_dir, " ".join(cmd), env["MAVEN_OPTS"])
     start = time.monotonic()
     try:
         result = subprocess.run(
-            cmd, cwd=project_dir, capture_output=True, text=True, timeout=timeout_seconds, check=False,
+            cmd, cwd=project_dir, capture_output=True, text=True, timeout=timeout_seconds, check=False, env=env,
         )
         duration = time.monotonic() - start
         return result.returncode, result.stdout + "\n" + result.stderr, duration
@@ -47,9 +57,13 @@ def compile_project(project_dir: Path | str) -> CompilationResult:
 
 def run_tests(project_dir: Path | str, test_class: str | None = None) -> TestRunResult:
     project_dir = Path(project_dir)
-    goals = ["-q", "test"]
+    # forkCount=0 runs Surefire's tests inside Maven's own JVM instead of
+    # spawning a second (forked) JVM for them -- one fewer JVM process
+    # competing for the container's memory, at the cost of per-test-class
+    # JVM isolation, an acceptable tradeoff for this project's small suite.
+    goals = ["-q", "-DforkCount=0", "test"]
     if test_class:
-        goals = ["-q", f"-Dtest={test_class}", "test"]
+        goals = ["-q", "-DforkCount=0", f"-Dtest={test_class}", "test"]
     code, output, duration = _run_maven(project_dir, goals, MAVEN_BUILD_TIMEOUT_SECONDS)
 
     cases, totals = _parse_surefire_reports(project_dir)
