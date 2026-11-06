@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: payshift-ai
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: PAYSHIFT_LLM_PROVIDER
+        value: openai
+      - key: PAYSHIFT_LLM_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: DEMO_ACCESS_KEY
+        sync: false
