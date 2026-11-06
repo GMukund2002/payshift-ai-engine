@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PayShift AI</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="boot-overlay" class="boot-overlay">
+  <div class="boot-card">
+    <div class="spinner"></div>
+    <h2>Waking up the server</h2>
+    <p id="boot-message">Connecting…</p>
+    <p class="boot-hint">This runs on a free-tier instance that sleeps when idle — first load can take up to a minute.</p>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">PayShift AI</span>
+    </div>
+    <div class="topbar-right">
+      <span id="data-backend-badge" class="pill pill-muted">data: …</span>
+      <span id="llm-badge" class="pill pill-muted">llm: …</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <nav class="sidenav">
+      <button class="nav-item active" data-view="run">New Run</button>
+      <button class="nav-item" data-view="history">Run History</button>
+    </nav>
+
+    <section id="view-run" class="view">
+      <div class="card">
+        <h1>Provider-agnostic AI engineer for payment integrations</h1>
+        <p class="subtle">Analyzes a Java/Spring Boot repository, researches a target PSP's real documentation, plans and generates an integration, then verifies it with a real compile + test run and a bounded self-repair loop. Nothing here is simulated — every step below calls the real pipeline.</p>
+      </div>
+
+      <div class="card">
+        <h2>1. Repository</h2>
+        <div class="repo-choice">
+          <button id="use-sample-btn" class="btn btn-secondary">Use bundled sample app</button>
+          <label class="upload-drop" for="zip-input">
+            <input id="zip-input" type="file" accept=".zip" hidden />
+            <span>or drop a Spring Boot project (.zip)</span>
+          </label>
+        </div>
+        <p id="repo-status" class="subtle small"></p>
+      </div>
+
+      <div class="card" id="mode-card" style="display:none">
+        <h2>2. Operation</h2>
+        <div class="row">
+          <div class="field">
+            <label>Mode</label>
+            <select id="mode-select">
+              <option value="ADD_PSP">ADD_PSP — add a new provider</option>
+              <option value="MIGRATE_PSP">MIGRATE_PSP — migrate future payments</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Target provider</label>
+            <input id="target-provider" type="text" placeholder="razorpay, adyen, paypal…" />
+          </div>
+          <div class="field">
+            <label>Doc URL (optional)</label>
+            <input id="doc-url" type="text" placeholder="required only if not pre-registered" />
+          </div>
+        </div>
+        <button id="analyze-btn" class="btn btn-primary">Analyze repository</button>
+      </div>
+
+      <div class="card" id="analysis-card" style="display:none">
+        <h2>3. Analysis</h2>
+        <div id="analysis-summary" class="stat-row"></div>
+        <div id="analysis-providers"></div>
+        <button id="run-btn" class="btn btn-primary">Run the agent pipeline</button>
+      </div>
+
+      <div class="card" id="progress-card" style="display:none">
+        <h2>4. Live execution</h2>
+        <ol id="node-list" class="node-list"></ol>
+      </div>
+
+      <div class="card" id="results-card" style="display:none">
+        <h2>5. Results</h2>
+        <div id="result-status"></div>
+        <div class="grid-2">
+          <div>
+            <h3>Files created</h3>
+            <pre id="files-created" class="code-block"></pre>
+            <h3>Files modified</h3>
+            <pre id="files-modified" class="code-block"></pre>
+          </div>
+          <div>
+            <h3>Test results</h3>
+            <pre id="test-results" class="code-block"></pre>
+            <h3>Unsupported / manual review</h3>
+            <pre id="unsupported" class="code-block"></pre>
+          </div>
+        </div>
+        <h3>Documentation citations</h3>
+        <ul id="doc-citations" class="citation-list"></ul>
+        <button id="download-report-btn" class="btn btn-secondary">Download report (.json)</button>
+      </div>
+    </section>
+
+    <section id="view-history" class="view hidden">
+      <div class="card">
+        <h2>Run history</h2>
+        <p class="subtle small" id="history-backend-note"></p>
+        <table class="history-table">
+          <thead><tr><th>Run</th><th>Mode</th><th>Target</th><th>Status</th><th>When</th></tr></thead>
+          <tbody id="history-body"></tbody>
+        </table>
+      </div>
+      <div class="card" id="history-detail-card" style="display:none">
+        <h2>Run detail</h2>
+        <pre id="history-detail" class="code-block"></pre>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
