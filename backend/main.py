@@ -7,6 +7,24 @@ subprocess, the live RAG pipeline, and the real LangGraph StateGraph -- this
 is a thin HTTP wrapper, not a reimplementation. Serves the static webapp/
 dashboard too, so the whole thing is one deployable service.
 
+/api/run is fire-and-forget + polling (POST starts a background thread and
+returns a run_id immediately; GET /api/runs/{id}/status is what the client
+polls), not a long-lived SSE stream. Found necessary running this for real
+on a memory-constrained free-tier deploy: holding one HTTP connection open
+for several minutes is fragile there, and if the container hiccups at all
+mid-stream the whole run was silently lost with nothing recorded and the
+client hung forever on a dead connection. Polling survives that: progress is
+persisted after every node (storage/db.py), so a crash-and-restart mid-run
+shows up as a stuck "RUNNING" row instead of nothing, and the client just
+sees a few failed polls before recovering -- degraded, not broken.
+
+Running the actual graph in a background THREAD (asyncio.to_thread), not
+just an asyncio task on the main loop, matters too: graph.stream() calls
+blocking subprocess.run() (mvn) and blocking HTTP (the LLM client) deep
+inside it, which would otherwise freeze the whole event loop -- including
+every other request, like the /status polling itself -- for the run's full
+duration.
+
 A shared DEMO_ACCESS_KEY env var, if set, gates the one costly endpoint
 (/api/run, which makes real paid LLM calls and runs real compile/test
 subprocesses) so a public deploy can't be used to spend someone else's
@@ -15,19 +33,19 @@ dev -- means no gate.
 """
 from __future__ import annotations
 
-import json
+import asyncio
+import logging
 import os
-import shutil
 import sys
 import uuid
 import zipfile
 from pathlib import Path
-from typing import AsyncIterator
 
 from fastapi import FastAPI, Header, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+logger = logging.getLogger("payshift.backend")
 
 BACKEND_ROOT = Path(__file__).resolve().parent
 REPO_ROOT = BACKEND_ROOT.parent
@@ -37,7 +55,7 @@ sys.path.insert(0, str(AI_ENGINE_ROOT))
 
 from agent.graph import build_graph  # noqa: E402
 from llm.client import NullLLMClient, get_llm_client  # noqa: E402
-from storage.db import backend_label, get_run_report, list_runs, save_run_report  # noqa: E402
+from storage.db import backend_label, get_run_status, list_runs, save_run_report, start_run, update_run_progress  # noqa: E402
 from tools.repository_tools import RepositoryAnalysisError, analyze_repository  # noqa: E402
 
 SAMPLE_APP = REPO_ROOT / "sample-apps" / "merchant-app"
@@ -133,46 +151,65 @@ class RunRequest(BaseModel):
     target_provider_doc_url: str | None = None
 
 
-@app.post("/api/run")
-async def run_pipeline(req: RunRequest, x_demo_key: str | None = Header(default=None)):
-    _require_demo_key(x_demo_key)
-    resolved = _resolve_repo_path(req.repo_path)
-    llm = get_llm_client()
-    graph = build_graph(llm)
-    run_id = uuid.uuid4().hex[:12]
+def _execute_pipeline_sync(run_id: str, repository_path: str, req: "RunRequest") -> None:
+    """Runs entirely in a worker thread (see module docstring) -- blocking
+    subprocess/HTTP calls here must never run on the main event loop."""
     initial_state = {
-        "repository_path": str(resolved),
+        "repository_path": repository_path,
         "operation_mode": req.operation_mode,
         "target_provider": req.target_provider,
         "target_provider_doc_url": req.target_provider_doc_url,
         "run_id": run_id,
     }
+    start_run(run_id=run_id, operation_mode=req.operation_mode, target_provider=req.target_provider)
 
-    async def events() -> AsyncIterator[str]:
-        accumulated = dict(initial_state)
-        yield f"data: {json.dumps({'type': 'start', 'run_id': run_id})}\n\n"
+    accumulated = dict(initial_state)
+    nodes_completed: list[dict] = []
+    try:
+        llm = get_llm_client()
+        graph = build_graph(llm)
         for event in graph.stream(initial_state, config={"recursion_limit": 50}):
             for node_name, update in event.items():
                 accumulated.update(update)
-                payload = {
-                    "type": "node",
+                nodes_completed.append({
                     "node": node_name,
                     "blocked": bool(update.get("blocked")),
                     "blocker_reason": update.get("blocker_reason"),
-                }
-                yield f"data: {json.dumps(payload)}\n\n"
-
+                })
+                update_run_progress(
+                    run_id=run_id, operation_mode=req.operation_mode,
+                    target_provider=req.target_provider, progress=nodes_completed,
+                )
+    except Exception as e:
+        logger.exception("Pipeline run %s crashed", run_id)
         save_run_report(
-            run_id=run_id,
-            operation_mode=req.operation_mode,
-            target_provider=req.target_provider,
+            run_id=run_id, operation_mode=req.operation_mode, target_provider=req.target_provider,
             existing_providers=accumulated.get("existing_providers", []),
-            final_status=accumulated.get("final_status") or accumulated.get("blocker_reason"),
-            report=accumulated.get("report"),
+            final_status=f"CRASHED: {e}", report=None, progress=nodes_completed,
         )
-        yield f"data: {json.dumps({'type': 'done', 'run_id': run_id, 'report': accumulated.get('report'), 'blocked': accumulated.get('blocked', False), 'blocker_reason': accumulated.get('blocker_reason')})}\n\n"
+        return
 
-    return StreamingResponse(events(), media_type="text/event-stream")
+    save_run_report(
+        run_id=run_id,
+        operation_mode=req.operation_mode,
+        target_provider=req.target_provider,
+        existing_providers=accumulated.get("existing_providers", []),
+        final_status=accumulated.get("final_status") or accumulated.get("blocker_reason"),
+        report=accumulated.get("report"),
+        progress=nodes_completed,
+    )
+
+
+@app.post("/api/run")
+async def run_pipeline(req: RunRequest, x_demo_key: str | None = Header(default=None)):
+    _require_demo_key(x_demo_key)
+    resolved = _resolve_repo_path(req.repo_path)
+    run_id = uuid.uuid4().hex[:12]
+    # Fire-and-forget: start the real work in a background thread and return
+    # immediately. The client polls /api/runs/{run_id}/status for progress --
+    # see the module docstring for why this replaced a long-lived SSE stream.
+    asyncio.create_task(asyncio.to_thread(_execute_pipeline_sync, run_id, str(resolved), req))
+    return {"run_id": run_id}
 
 
 @app.get("/api/runs")
@@ -180,12 +217,20 @@ def runs(limit: int = 20):
     return list_runs(limit=limit)
 
 
+@app.get("/api/runs/{run_id}/status")
+def run_status(run_id: str):
+    status = get_run_status(run_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="Unknown run_id")
+    return status
+
+
 @app.get("/api/runs/{run_id}")
 def run_detail(run_id: str):
-    report = get_run_report(run_id)
-    if report is None:
-        raise HTTPException(status_code=404, detail="Run not found or has no stored report")
-    return report
+    status = get_run_status(run_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return status
 
 
 # Static dashboard -- mounted last so it doesn't shadow the /api/* routes above.

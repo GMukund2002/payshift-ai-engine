@@ -1,4 +1,4 @@
-"""Run-history persistence.
+"""Run-history persistence, including in-progress status for polling.
 
 Separate from everything the agent graph does: this is telemetry (what ran,
 when, with what result), not a correctness guardrail, so unlike the rest of
@@ -12,9 +12,15 @@ Two backends behind one interface, selected by the DATABASE_URL env var:
 - Unset: a local SQLite file (ai-engine/storage/local_runs.db, gitignored)
   so the app has a working "data" layer with zero setup for local demos.
 
-Both paths hit the exact same schema and the exact same call sites in
-main.py / frontend/app.py -- swapping backends is a config change, not a
-code change, the same pattern already used for the LLM client.
+A run is now written incrementally -- start_run() when it begins,
+update_run_progress() after every node, save_run_report() at the end --
+instead of only once at completion. Found necessary running this for real on
+a memory-constrained free-tier deploy: a container crash mid-run used to lose
+the run entirely (nothing in history, client hung on a dead stream forever).
+Now the row always reflects the last progress actually persisted, so a crash
+shows as a stuck "RUNNING" row instead of nothing, and the client (polling,
+not a long-lived stream) just sees a few failed poll attempts and recovers
+once a new instance is up, rather than hanging indefinitely.
 """
 from __future__ import annotations
 
@@ -37,7 +43,8 @@ CREATE TABLE IF NOT EXISTS runs (
     existing_providers TEXT,
     final_status TEXT,
     created_at TEXT,
-    report_json TEXT
+    report_json TEXT,
+    progress_json TEXT
 )
 """
 
@@ -55,35 +62,101 @@ def _connect():
     else:
         conn = sqlite3.connect(LOCAL_DB_PATH)
         placeholder = "?"
-    conn.cursor().execute(_SCHEMA)
+    cur = conn.cursor()
+    cur.execute(_SCHEMA)
+    # Migration for a table created before progress_json existed. Both SQLite
+    # and Postgres support ALTER TABLE ... ADD COLUMN; neither's version here
+    # is guaranteed to support "IF NOT EXISTS" on it, so just swallow the
+    # "already exists" error rather than checking first (TOCTOU-safe, and
+    # this runs rarely -- once per connection, cached nowhere).
+    try:
+        cur.execute("ALTER TABLE runs ADD COLUMN progress_json TEXT")
+    except Exception:
+        pass
     conn.commit()
     return conn, placeholder
+
+
+def _upsert(
+    *, run_id: str, operation_mode: str, target_provider: str,
+    existing_providers: list[str], final_status: str | None,
+    report: dict | None, progress: list[dict] | None,
+) -> None:
+    conn, ph = _connect()
+    try:
+        cur = conn.cursor()
+        values = (
+            run_id, operation_mode, target_provider, json.dumps(existing_providers or []),
+            final_status, datetime.now(timezone.utc).isoformat(),
+            json.dumps(report) if report is not None else None,
+            json.dumps(progress if progress is not None else []),
+        )
+        if ph == "%s":
+            cur.execute(
+                f"INSERT INTO runs (run_id, operation_mode, target_provider, existing_providers, "
+                f"final_status, created_at, report_json, progress_json) "
+                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}) "
+                f"ON CONFLICT (run_id) DO UPDATE SET "
+                f"final_status = EXCLUDED.final_status, report_json = EXCLUDED.report_json, "
+                f"progress_json = EXCLUDED.progress_json, existing_providers = EXCLUDED.existing_providers",
+                values,
+            )
+        else:
+            cur.execute(
+                f"INSERT INTO runs (run_id, operation_mode, target_provider, existing_providers, "
+                f"final_status, created_at, report_json, progress_json) "
+                f"VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}) "
+                f"ON CONFLICT(run_id) DO UPDATE SET "
+                f"final_status = excluded.final_status, report_json = excluded.report_json, "
+                f"progress_json = excluded.progress_json, existing_providers = excluded.existing_providers",
+                values,
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def start_run(*, run_id: str, operation_mode: str, target_provider: str) -> None:
+    """Called the moment a run begins, before any node has executed, so it
+    shows up in history immediately as RUNNING rather than only on completion."""
+    try:
+        _upsert(
+            run_id=run_id, operation_mode=operation_mode, target_provider=target_provider,
+            existing_providers=[], final_status="RUNNING", report=None, progress=[],
+        )
+    except Exception:
+        logger.warning("Could not record run start for %s on %s -- continuing without it",
+                        run_id, backend_label(), exc_info=True)
+
+
+def update_run_progress(
+    *, run_id: str, operation_mode: str, target_provider: str, progress: list[dict],
+) -> None:
+    """Called after every node completes. Keeps final_status as RUNNING;
+    save_run_report() is what sets the real terminal status."""
+    try:
+        _upsert(
+            run_id=run_id, operation_mode=operation_mode, target_provider=target_provider,
+            existing_providers=[], final_status="RUNNING", report=None, progress=progress,
+        )
+    except Exception:
+        logger.warning("Could not persist progress for run %s on %s -- continuing without it",
+                        run_id, backend_label(), exc_info=True)
 
 
 def save_run_report(
     *, run_id: str, operation_mode: str, target_provider: str,
     existing_providers: list[str], final_status: str | None, report: dict | None,
+    progress: list[dict] | None = None,
 ) -> None:
     """Best-effort: a DB problem is logged, never raised, so it can't turn a
     real pipeline run into a failure just because telemetry couldn't write."""
     try:
-        conn, ph = _connect()
-        try:
-            cur = conn.cursor()
-            on_conflict = "ON CONFLICT (run_id) DO NOTHING" if ph == "%s" else ""
-            insert_or = "INSERT" if ph == "%s" else "INSERT OR IGNORE"
-            cur.execute(
-                f"{insert_or} INTO runs (run_id, operation_mode, target_provider, existing_providers, "
-                f"final_status, created_at, report_json) VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, {ph}) "
-                f"{on_conflict}",
-                (
-                    run_id, operation_mode, target_provider, json.dumps(existing_providers or []),
-                    final_status, datetime.now(timezone.utc).isoformat(), json.dumps(report) if report else None,
-                ),
-            )
-            conn.commit()
-        finally:
-            conn.close()
+        _upsert(
+            run_id=run_id, operation_mode=operation_mode, target_provider=target_provider,
+            existing_providers=existing_providers, final_status=final_status, report=report,
+            progress=progress,
+        )
     except Exception:
         logger.warning("Could not persist run %s to %s -- continuing without it", run_id, backend_label(), exc_info=True)
 
@@ -131,3 +204,32 @@ def get_run_report(run_id: str) -> dict | None:
     if not row or not row[0]:
         return None
     return json.loads(row[0])
+
+
+def get_run_status(run_id: str) -> dict | None:
+    """What the frontend polls: current status, nodes completed so far, and
+    the final report once there is one. Returns None if the run_id is unknown
+    (never started, or persistence failed at start_run time)."""
+    try:
+        conn, ph = _connect()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"SELECT final_status, progress_json, report_json FROM runs WHERE run_id = {ph}",
+                (run_id,),
+            )
+            row = cur.fetchone()
+        finally:
+            conn.close()
+    except Exception:
+        logger.warning("Could not fetch status for run %s from %s", run_id, backend_label(), exc_info=True)
+        return None
+
+    if not row:
+        return None
+    final_status, progress_json, report_json = row
+    return {
+        "status": final_status,
+        "progress": json.loads(progress_json) if progress_json else [],
+        "report": json.loads(report_json) if report_json else None,
+    }
