@@ -135,12 +135,9 @@ async function runPipeline() {
   const headers = { "Content-Type": "application/json" };
   const demoKey = getDemoKey();
   if (demoKey) headers["X-Demo-Key"] = demoKey;
+  const body = JSON.stringify({ repo_path: state.repoPath, operation_mode: mode, target_provider: target, target_provider_doc_url: docUrl });
 
-  let res = await fetch("/api/run", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ repo_path: state.repoPath, operation_mode: mode, target_provider: target, target_provider_doc_url: docUrl }),
-  });
+  let res = await fetch("/api/run", { method: "POST", headers, body });
 
   if (res.status === 401) {
     // This deploy requires a demo access key (set via DEMO_ACCESS_KEY) that
@@ -150,11 +147,7 @@ async function runPipeline() {
     if (!entered) { $("run-btn").disabled = false; $("progress-card").style.display = "none"; return; }
     localStorage.setItem("payshift_demo_key", entered);
     headers["X-Demo-Key"] = entered;
-    res = await fetch("/api/run", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ repo_path: state.repoPath, operation_mode: mode, target_provider: target, target_provider_doc_url: docUrl }),
-    });
+    res = await fetch("/api/run", { method: "POST", headers, body });
     if (res.status === 401) {
       alert("That key was rejected too. Double-check the DEMO_ACCESS_KEY value set on the deployment.");
       localStorage.removeItem("payshift_demo_key");
@@ -164,34 +157,58 @@ async function runPipeline() {
     }
   }
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const parts = buffer.split("\n\n");
-    buffer = parts.pop();
-    for (const part of parts) {
-      const line = part.trim();
-      if (!line.startsWith("data:")) continue;
-      const payload = JSON.parse(line.slice(5).trim());
-      handleStreamEvent(payload);
-    }
+  if (!res.ok) {
+    alert("Could not start the run: " + (await res.text()));
+    $("run-btn").disabled = false;
+    $("progress-card").style.display = "none";
+    return;
   }
+
+  const { run_id } = await res.json();
+  await pollRun(run_id);
   $("run-btn").disabled = false;
 }
 
-function handleStreamEvent(payload) {
-  if (payload.type === "node") {
-    const li = document.createElement("li");
-    if (payload.blocked) li.classList.add("blocked");
-    li.innerHTML = `<span class="node-dot"></span><span>${payload.node}</span>` +
-      (payload.blocked ? `<span class="subtle small">— blocked: ${payload.blocker_reason}</span>` : "");
-    $("node-list").appendChild(li);
-  } else if (payload.type === "done") {
-    renderResults(payload);
+// Polls instead of reading a long-lived stream -- see backend/main.py's
+// module docstring for why: a free-tier container can crash mid-run, and
+// polling degrades gracefully (a few failed checks, then recovery) instead
+// of hanging on a connection nothing will ever write to again.
+async function pollRun(runId) {
+  let shown = 0;
+  let consecutiveFailures = 0;
+  const MAX_CONSECUTIVE_FAILURES = 6; // ~30s of failures, tolerating a crash+restart cycle
+
+  for (;;) {
+    await new Promise((r) => setTimeout(r, 3000));
+    let data;
+    try {
+      const res = await fetch(`/api/runs/${runId}/status`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      data = await res.json();
+      consecutiveFailures = 0;
+    } catch (e) {
+      consecutiveFailures++;
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        alert("Lost contact with the server while this run was in progress (it may have crashed and is restarting). Check Run History in a minute -- the run may still complete and show up there.");
+        return;
+      }
+      continue;
+    }
+
+    for (; shown < data.progress.length; shown++) {
+      const n = data.progress[shown];
+      const li = document.createElement("li");
+      if (n.blocked) li.classList.add("blocked");
+      li.innerHTML = `<span class="node-dot"></span><span>${n.node}</span>` +
+        (n.blocked ? `<span class="subtle small">— blocked: ${n.blocker_reason}</span>` : "");
+      $("node-list").appendChild(li);
+    }
+
+    if (data.status && data.status !== "RUNNING") {
+      const crashed = typeof data.status === "string" && data.status.startsWith("CRASHED");
+      renderResults({ report: data.report, blocker_reason: crashed ? data.status : null });
+      return;
+    }
   }
 }
 
