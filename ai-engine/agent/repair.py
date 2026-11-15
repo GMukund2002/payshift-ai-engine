@@ -117,10 +117,17 @@ def repair_code(state: AgentState, llm: LLMClient) -> dict:
 
     accepted, rejected = _scope_repair_files(state, raw.get("files", []), editable)
 
-    attempt_number = state.get("repair_count", 0) + 1
+    # Static-check failures and compile/test failures draw on separate budgets
+    # (see agent/graph.py); which one this repair spends depends on what failed.
+    static = state.get("static_check_result") or {}
+    kind = "static" if not static.get("passed", True) else "build"
+    counter = "static_repair_count" if kind == "static" else "repair_count"
+
     repair_attempts = list(state.get("repair_attempts", []))
+    attempt_number = len(repair_attempts) + 1
     repair_attempts.append({
         "attempt_number": attempt_number,
+        "kind": kind,
         "failure_summary": _summarize_failure(state)[:1000],
         "diagnosis": diagnosis.get("diagnosis_summary", ""),
         "patch_description": raw.get("patch_description", ""),
@@ -137,7 +144,7 @@ def repair_code(state: AgentState, llm: LLMClient) -> dict:
     return {
         "pending_patch": accepted,
         "repair_attempts": repair_attempts,
-        "repair_count": attempt_number,
+        counter: state.get(counter, 0) + 1,
     }
 
 

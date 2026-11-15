@@ -54,6 +54,21 @@ since it wouldn't implement the new method either. If a capability genuinely nee
 existing interface doesn't have, define a separate new interface for it instead of extending the \
 shared one.
 - Never modify anything under a src/test/ path.
+- Spring wiring must start cleanly (it is checked automatically before compiling, and every existing \
+test boots the full ApplicationContext):
+  * Only inject (constructor/@Autowired) types that ARE beans: classes annotated @Component/@Service/\
+@Repository/..., Spring Data repositories, types returned by a @Bean method, or Spring Boot \
+auto-configured beans. RestTemplate, RestClient, WebClient, HttpClient and Clock are NOT \
+auto-configured -- inject RestTemplateBuilder (or RestClient.Builder) and call build(), or declare a \
+@Bean for them in a @Configuration class you were asked to generate.
+  * Every @Value placeholder must either have a safe default ("${payshift.<provider>.key-id:placeholder}") \
+or reference a key that already exists in the application config shown below. Never commit a real secret.
+  * Do not make a new class implement an interface the existing provider already implements and other \
+code injects (that creates two candidate beans and breaks startup); give the new provider its own \
+interface.
+- Write real, working code. No placeholder methods: no "TODO"/"implement the logic" comments, no \
+methods that only log or return null, no UnsupportedOperationException. If you create an interface, \
+the plan must also contain a class implementing it.
 - The "path" you return MUST be copied character-for-character from the target file path you \
 were given -- including the exact Java package path. Do not invent your own package name (e.g. \
 do not write "com.example.*"); reuse the existing repository's real package, which you can see \
@@ -98,6 +113,7 @@ def generate_code(state: AgentState, llm: LLMClient) -> dict:
             logger.warning("Planned modification target does not exist on disk: %s", f["path"])
 
     relevant_docs = {op: retrieved[op] for op in actionable_ops if op in retrieved}
+    app_config = _read_application_config(repository_path)
 
     # One LLM call per planned file, new files before modifications to existing ones,
     # so a call generating (say) a controller edit can see the actual content of the
@@ -116,6 +132,7 @@ def generate_code(state: AgentState, llm: LLMClient) -> dict:
             modify_context=modify_context,
             relevant_docs=relevant_docs,
             already_generated=generated,
+            app_config=app_config,
         )
         if outcome.get("blocked"):
             # Partial progress is reported alongside the block so a caller can see
@@ -133,9 +150,22 @@ def generate_code(state: AgentState, llm: LLMClient) -> dict:
     return {"generated_files": files, "pending_patch": files}
 
 
+def _read_application_config(repository_path: Path) -> dict[str, str]:
+    """The app's main Spring config files, so @Value placeholders can reference
+    keys that really exist (an unresolvable placeholder fails the whole
+    ApplicationContext -- see README run 6)."""
+    resources = repository_path / "src" / "main" / "resources"
+    config = {}
+    if resources.is_dir():
+        for f in sorted(resources.glob("application*")):
+            if f.suffix in (".yml", ".yaml", ".properties") and f.is_file():
+                config[str(f.relative_to(repository_path))] = f.read_text(encoding="utf-8", errors="replace")[:8000]
+    return config
+
+
 def _generate_one_file(
     *, llm: LLMClient, plan: dict, target: dict, modify_context: dict[str, str],
-    relevant_docs: dict, already_generated: dict[str, str],
+    relevant_docs: dict, already_generated: dict[str, str], app_config: dict[str, str] | None = None,
 ) -> dict:
     path = target["path"]
 
@@ -144,6 +174,11 @@ def _generate_one_file(
         + json.dumps(plan, indent=2),
         "\n\nTARGET FILE TO GENERATE NOW:\n" + json.dumps(target, indent=2),
     ]
+    if app_config:
+        user_prompt_parts.append(
+            "\n\nEXISTING APPLICATION CONFIG (keys a @Value placeholder may reference without a default):\n"
+            + json.dumps(app_config, indent=2)
+        )
     current_content = modify_context.get(path)
     if current_content is not None:
         user_prompt_parts.append(

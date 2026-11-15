@@ -1,17 +1,23 @@
-"""Phase 9: the real LangGraph StateGraph wiring all 14 required nodes together,
-with conditional routing driven by actual tool/LLM outputs (never hardcoded to
+"""The LangGraph StateGraph wiring the pipeline's nodes together, with
+conditional routing driven by actual tool/LLM outputs (never hardcoded to
 assume a specific provider or a specific outcome).
 
-Routing summary (mirrors the spec's "Conditional Behavior" section):
+Routing summary:
 - Any node that sets state["blocked"] short-circuits straight to generate_report.
 - create_plan's hard guardrail (no retrieved docs -> no SUPPORTED claim) and the
   "all operations unsupported" path both flow through the same blocked check.
 - generate_code treats "nothing is actionable" as blocked too, so there's one
   single routing rule for "stop unsupported code generation and report it".
+- apply_patch -> static_checks (deterministic wiring/stub checks) -> compile.
+  A static-check failure routes to diagnose_failures -> repair_code with its own
+  budget (MAX_STATIC_REPAIR_ATTEMPTS), so cheap pre-compile fixes never consume
+  the attempts the real build needs.
 - compile_project / run_tests failures route to diagnose_failures -> repair_code
-  -> apply_patch -> compile_project, bounded to MAX_REPAIR_ATTEMPTS total passes;
-  once exhausted, whatever the last state was flows to generate_report as
-  UNRESOLVED_FAILURE (never silently claimed as success).
+  -> apply_patch -> static_checks -> compile_project, bounded to
+  MAX_REPAIR_ATTEMPTS; once exhausted, whatever the last state was flows to
+  generate_report as UNRESOLVED_FAILURE (never silently claimed as success).
+- A repair whose every file was rejected changes nothing, so it skips straight
+  to the next diagnosis (or the report) instead of re-running an unchanged build.
 """
 from __future__ import annotations
 
@@ -21,7 +27,8 @@ from langgraph.graph import END, START, StateGraph
 
 from agent import discovery, generation, planning, repair, reporting, research, understanding, verification
 from agent.apply_patch import apply_patch
-from agent.state import MAX_REPAIR_ATTEMPTS, AgentState
+from agent.state import MAX_REPAIR_ATTEMPTS, MAX_STATIC_REPAIR_ATTEMPTS, AgentState
+from agent.static_checks import static_checks
 from llm.client import LLMClient
 
 
@@ -29,22 +36,32 @@ def _route_blocked(state: AgentState) -> str:
     return "blocked" if state.get("blocked") else "continue"
 
 
+def _build_budget_left(state: AgentState) -> bool:
+    return state.get("repair_count", 0) < MAX_REPAIR_ATTEMPTS
+
+
+def _static_budget_left(state: AgentState) -> bool:
+    return state.get("static_repair_count", 0) < MAX_STATIC_REPAIR_ATTEMPTS
+
+
+def _route_after_static_checks(state: AgentState) -> str:
+    if (state.get("static_check_result") or {}).get("passed", True):
+        return "compile_project"
+    return "diagnose_failures" if _static_budget_left(state) else "generate_report"
+
+
 def _route_after_compile(state: AgentState) -> str:
-    compilation = state.get("compilation_result", {})
+    compilation = state.get("compilation_result") or {}
     if compilation.get("success"):
         return "run_tests"
-    if state.get("repair_count", 0) < MAX_REPAIR_ATTEMPTS:
-        return "diagnose_failures"
-    return "generate_report"
+    return "diagnose_failures" if _build_budget_left(state) else "generate_report"
 
 
 def _route_after_tests(state: AgentState) -> str:
-    test_result = state.get("test_result", {})
+    test_result = state.get("test_result") or {}
     if test_result.get("success"):
         return "generate_report"
-    if state.get("repair_count", 0) < MAX_REPAIR_ATTEMPTS:
-        return "diagnose_failures"
-    return "generate_report"
+    return "diagnose_failures" if _build_budget_left(state) else "generate_report"
 
 
 def _route_after_repair(state: AgentState) -> str:
@@ -53,12 +70,13 @@ def _route_after_repair(state: AgentState) -> str:
     if state.get("pending_patch"):
         return "apply_patch"
     # The repair's every file was out of scope and rejected, so the workspace is
-    # unchanged: recompiling would just reproduce the same failure (minutes of
-    # Maven). Spend the next attempt on a fresh diagnosis -- which is shown why
-    # the last patch was rejected -- or stop if the budget is gone.
-    if state.get("repair_count", 0) < MAX_REPAIR_ATTEMPTS:
-        return "diagnose_failures"
-    return "generate_report"
+    # unchanged: re-checking/recompiling would just reproduce the same failure.
+    # Spend the next attempt on a fresh diagnosis -- which is shown why the last
+    # patch was rejected -- or stop if that kind of budget is gone.
+    attempts = state.get("repair_attempts") or []
+    kind = attempts[-1].get("kind", "build") if attempts else "build"
+    budget_left = _static_budget_left(state) if kind == "static" else _build_budget_left(state)
+    return "diagnose_failures" if budget_left else "generate_report"
 
 
 def build_graph(llm: LLMClient):
@@ -73,6 +91,7 @@ def build_graph(llm: LLMClient):
     graph.add_node("create_plan", partial(planning.create_plan, llm=llm))
     graph.add_node("generate_code", partial(generation.generate_code, llm=llm))
     graph.add_node("apply_patch", apply_patch)
+    graph.add_node("static_checks", static_checks)
     graph.add_node("compile_project", verification.compile_project)
     graph.add_node("run_tests", verification.run_tests)
     graph.add_node("diagnose_failures", partial(repair.diagnose_failures, llm=llm))
@@ -92,7 +111,10 @@ def build_graph(llm: LLMClient):
                                  {"blocked": "generate_report", "continue": "generate_code"})
     graph.add_conditional_edges("generate_code", _route_blocked,
                                  {"blocked": "generate_report", "continue": "apply_patch"})
-    graph.add_edge("apply_patch", "compile_project")
+    graph.add_edge("apply_patch", "static_checks")
+    graph.add_conditional_edges("static_checks", _route_after_static_checks,
+                                 {"compile_project": "compile_project", "diagnose_failures": "diagnose_failures",
+                                  "generate_report": "generate_report"})
     graph.add_conditional_edges("compile_project", _route_after_compile,
                                  {"run_tests": "run_tests", "diagnose_failures": "diagnose_failures",
                                   "generate_report": "generate_report"})

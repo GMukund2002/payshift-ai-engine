@@ -43,7 +43,13 @@ plan a new, separate interface instead.
 - For MIGRATE_PSP: never claim historical payments move providers. Fill cutover_checklist and \
 preserved_historical_ownership_note describing how old payment/refund ownership is preserved.
 - For ADD_PSP: existing provider's behavior and tests must be explicitly preserved (say so in \
-required_changes), not just left alone by omission.
+required_changes), not just left alone by omission. Strongly prefer ADDITIVE changes (new adapter, \
+service, controller, configuration classes) over modifying existing services/controllers: every \
+existing test boots the full Spring ApplicationContext, so a new constructor dependency added to an \
+existing class breaks every existing test if anything about the new provider fails to wire.
+- If files_to_create contains an interface, it MUST also contain a class implementing it. If the new \
+provider's client needs an HTTP client bean (RestTemplate/RestClient/WebClient), plan a \
+@Configuration class that defines it -- Spring Boot does not auto-configure those.
 - Internal consistency is mandatory: if ANY capability_decisions entry is "SUPPORTED" or \
 "PARTIALLY_SUPPORTED", files_to_create and/or files_to_modify together MUST list at least one \
 file that implements it (e.g. a new provider adapter class, or a modified service/controller). \

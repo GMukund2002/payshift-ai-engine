@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
-MAX_REPAIR_ATTEMPTS = 2
+MAX_REPAIR_ATTEMPTS = 2          # compile/test failures
+MAX_STATIC_REPAIR_ATTEMPTS = 2   # deterministic pre-compile check failures (separate budget)
 
 
 class AgentState(TypedDict, total=False):
@@ -57,7 +58,8 @@ class AgentState(TypedDict, total=False):
     # diagnose_failures / repair_code
     diagnosis: dict[str, Any]
     repair_attempts: list[dict[str, Any]]
-    repair_count: int
+    repair_count: int          # compile/test repairs used
+    static_repair_count: int   # static-check repairs used
 
     # generate_report
     report: dict[str, Any]

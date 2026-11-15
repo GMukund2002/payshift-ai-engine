@@ -36,6 +36,8 @@ class RejectedFile(BaseModel):
 
 class RepairAttempt(BaseModel):
     attempt_number: int
+    kind: str = "build"  # "static" (pre-compile check failure) | "build" (compile/test failure)
+    static_checks_passed: bool | None = None
     failure_summary: str
     diagnosis: str
     patch_description: str

@@ -67,3 +67,25 @@ def analyze_repository(repository_path: Path | str, timeout_seconds: int = 120) 
         raise RepositoryAnalysisError(f"Analyzer did not emit valid JSON: {e}\nstdout: {result.stdout[:2000]}") from e
 
     return RepositoryAnalysis.model_validate(raw)
+
+
+def check_wiring(repository_path: Path | str, changed_files: list[str], timeout_seconds: int = 120) -> dict:
+    """Runs java-analyzer's deterministic Spring wiring / stub checks (see
+    WiringChecker.java) over a repository, reporting findings only for
+    `changed_files`. Returns {"passed": bool, "findings": [...], "errors": [...]}.
+    Raises RepositoryAnalysisError if the checker itself could not run."""
+    repository_path = Path(repository_path).resolve()
+    if not ANALYZER_JAR.exists():
+        raise RepositoryAnalysisError(f"java-analyzer.jar not found at {ANALYZER_JAR}")
+    cmd = ["java", "-jar", str(ANALYZER_JAR), str(repository_path), "--check-wiring",
+           "--changed", ",".join(changed_files)]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_seconds, check=False)
+    except subprocess.TimeoutExpired as e:
+        raise RepositoryAnalysisError(f"Wiring check timed out after {timeout_seconds}s") from e
+    if result.returncode != 0:
+        raise RepositoryAnalysisError(f"Wiring check exited with code {result.returncode}: {result.stderr[:2000]}")
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError as e:
+        raise RepositoryAnalysisError(f"Wiring check did not emit valid JSON: {e}") from e

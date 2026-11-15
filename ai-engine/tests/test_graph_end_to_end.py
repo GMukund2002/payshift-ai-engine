@@ -139,13 +139,18 @@ def test_full_add_psp_pipeline_end_to_end():
     assert tests["failures"] == 0
     assert tests["errors"] == 0
 
-    # No repair needed since the scripted generation compiles clean on the first pass.
+    # No repair needed since the scripted generation compiles clean on the first pass,
+    # and the deterministic wiring/stub checks raise no false positive on it.
     assert final_state.get("repair_count", 0) == 0
+    assert final_state.get("static_repair_count", 0) == 0
+    assert final_state["static_check_result"]["passed"] is True
+    assert not [f for f in final_state["static_check_result"]["findings"] if f["severity"] == "ERROR"]
 
     report = final_state["report"]
     assert report["verification"]["final_status"] == "VERIFIED"
-    assert len(report["files_created"]) == 7
+    assert len(report["files_created"]) == 7   # computed from the workspace, not the plan
     assert report["files_modified"] == []  # fully additive -- existing Stripe code untouched
+    assert report["llm_usage"]["calls"] == 2 + 7  # architecture + plan + one call per planned file
     assert final_state["final_status"] == "VERIFIED"
 
     # The existing Stripe regression tests are in the passing set, proving the
