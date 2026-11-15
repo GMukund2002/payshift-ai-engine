@@ -163,23 +163,45 @@ public class WiringChecker {
 
     private final List<ClassModel> classes = new ArrayList<>();
     private final Map<String, List<ClassModel>> bySimpleName = new HashMap<>();
+    private final Map<String, ClassModel> byFqn = new HashMap<>();
     private final List<BeanMethod> beanMethods = new ArrayList<>();
 
-    private record BeanMethod(String returnType, String beanName, boolean primary, String file, MethodDeclaration decl) {
+    private record BeanMethod(String rawReturnType, String beanName, boolean primary, String file,
+                              MethodDeclaration decl, ClassModel owner) {
     }
 
+    /**
+     * Types are identified by fully qualified name, resolved per file from its
+     * package and imports -- not by simple name. Simple-name matching let a
+     * generated second interface named PaymentProvider (in an invented package)
+     * look like the app's real PaymentProvider, so an adapter the router could
+     * never see was judged reachable (live eval run eval-multi-psp-router-1).
+     */
     private static final class ClassModel {
         final String file;
         final ClassOrInterfaceDeclaration decl;
         final String simpleName;
-        final Set<String> directSupertypes = new LinkedHashSet<>();
+        final String pkg;
+        final String fqn;
+        final Map<String, String> singleImports = new HashMap<>();
+        final List<String> wildcardImports = new ArrayList<>();
+        final List<String> rawSupertypes = new ArrayList<>();
+        final Set<String> directSupertypes = new LinkedHashSet<>(); // resolved, filled after parsing
 
-        ClassModel(String file, ClassOrInterfaceDeclaration decl) {
+        ClassModel(String file, ClassOrInterfaceDeclaration decl, CompilationUnit cu) {
             this.file = file;
             this.decl = decl;
             this.simpleName = decl.getNameAsString();
-            decl.getImplementedTypes().forEach(t -> directSupertypes.add(t.getNameAsString()));
-            decl.getExtendedTypes().forEach(t -> directSupertypes.add(t.getNameAsString()));
+            this.pkg = cu.getPackageDeclaration().map(pd -> pd.getNameAsString()).orElse("");
+            this.fqn = decl.getFullyQualifiedName().orElse(pkg.isEmpty() ? simpleName : pkg + "." + simpleName);
+            for (var imp : cu.getImports()) {
+                if (imp.isStatic()) continue;
+                String name = imp.getNameAsString();
+                if (imp.isAsterisk()) wildcardImports.add(name);
+                else singleImports.put(name.substring(name.lastIndexOf('.') + 1), name);
+            }
+            decl.getImplementedTypes().forEach(t -> rawSupertypes.add(t.getNameWithScope()));
+            decl.getExtendedTypes().forEach(t -> rawSupertypes.add(t.getNameWithScope()));
         }
 
         boolean isInterface() {
@@ -234,6 +256,7 @@ public class WiringChecker {
                 checkValuePlaceholders(cm, config, report);
                 checkStubMethods(cm, report);
                 checkUnusedConfigValues(cm, report);
+                checkDuplicateTypeName(cm, changed, report);
                 if (cm.isInterface()) checkInterfaceImplemented(cm, report);
             }
         }
@@ -245,8 +268,8 @@ public class WiringChecker {
         for (BeanMethod bm : beanMethods) {
             boolean isChanged = changed.contains(bm.file());
             for (Parameter p : bm.decl().getParameters()) {
-                checkInjectionPoint(null, new InjectionPoint(bm.file(), p, p.getType(), p.getNameAsString(),
-                        p.getAnnotations()), isChanged, changed, report);
+                checkInjectionPoint(null, new InjectionPoint(bm.owner(), bm.file(), p, p.getType(),
+                        p.getNameAsString(), p.getAnnotations()), isChanged, changed, report);
             }
         }
 
@@ -277,9 +300,10 @@ public class WiringChecker {
                 continue;
             }
             for (ClassOrInterfaceDeclaration decl : cu.findAll(ClassOrInterfaceDeclaration.class)) {
-                ClassModel cm = new ClassModel(rel, decl);
+                ClassModel cm = new ClassModel(rel, decl, cu);
                 classes.add(cm);
                 bySimpleName.computeIfAbsent(cm.simpleName, k -> new ArrayList<>()).add(cm);
+                byFqn.put(cm.fqn, cm);
                 boolean canDeclareBeans = cm.isBeanClass();
                 if (!canDeclareBeans) continue;
                 for (MethodDeclaration m : decl.getMethods()) {
@@ -289,15 +313,52 @@ public class WiringChecker {
                     String name = Optional.ofNullable(annotationValue(bean.get())).filter(s -> !s.isBlank())
                             .orElse(m.getNameAsString());
                     boolean primary = m.getAnnotations().stream().anyMatch(a -> simple(a.getNameAsString()).equals("Primary"));
-                    beanMethods.add(new BeanMethod(typeName(m.getType()), name, primary, rel, m));
+                    beanMethods.add(new BeanMethod(typeName(m.getType()), name, primary, rel, m, cm));
                 }
             }
         }
+        for (ClassModel cm : classes) {
+            for (String raw : cm.rawSupertypes) cm.directSupertypes.add(resolve(cm, raw));
+        }
+    }
+
+    /**
+     * Resolves a type name as written in {@code ctx}'s source file to a fully
+     * qualified name: explicit import, enclosing/nested types, same package,
+     * wildcard imports. Project types resolve to their FQN; an external type
+     * resolves to its imported FQN when imported, else stays as written. A
+     * simple name with no import that matches exactly one project type
+     * (sources written without imports, e.g. snippets) resolves to it.
+     */
+    private String resolve(ClassModel ctx, String written) {
+        String n = written.contains("<") ? written.substring(0, written.indexOf('<')) : written;
+        if (byFqn.containsKey(n)) return n;
+        int dot = n.indexOf('.');
+        if (dot > 0 && Character.isLowerCase(n.charAt(0))) return n; // already package-qualified
+        String head = dot > 0 ? n.substring(0, dot) : n;
+        String tail = dot > 0 ? n.substring(dot) : "";
+        String imported = ctx.singleImports.get(head);
+        if (imported != null) return imported + tail;
+        for (String outer = ctx.fqn; outer.contains("."); outer = outer.substring(0, outer.lastIndexOf('.'))) {
+            if (byFqn.containsKey(outer + "." + n)) return outer + "." + n;
+        }
+        if (byFqn.containsKey(ctx.pkg + "." + n)) return ctx.pkg + "." + n;
+        for (String w : ctx.wildcardImports) {
+            if (byFqn.containsKey(w + "." + n)) return w + "." + n;
+        }
+        List<ClassModel> sameName = bySimpleName.get(head);
+        if (tail.isEmpty() && sameName != null && sameName.size() == 1) return sameName.get(0).fqn;
+        return n;
+    }
+
+    private static String simpleOf(String name) {
+        return name.substring(name.lastIndexOf('.') + 1);
     }
 
     // ------------------------------------------------------------------ injection
 
-    private record InjectionPoint(String file, Node node, Type type, String name, NodeList<AnnotationExpr> annotations) {
+    private record InjectionPoint(ClassModel ctx, String file, Node node, Type type, String name,
+                                  NodeList<AnnotationExpr> annotations) {
     }
 
     private List<InjectionPoint> injectionPoints(ClassModel cm) {
@@ -313,7 +374,7 @@ public class WiringChecker {
         }
         if (chosen != null) {
             for (Parameter p : chosen.getParameters()) {
-                points.add(new InjectionPoint(cm.file, p, p.getType(), p.getNameAsString(), p.getAnnotations()));
+                points.add(new InjectionPoint(cm, cm.file, p, p.getType(), p.getNameAsString(), p.getAnnotations()));
             }
         } else if (ctors.isEmpty() && cm.hasAnnotation("RequiredArgsConstructor", "AllArgsConstructor")) {
             // Lombok-generated constructor: final (or all) non-static instance fields.
@@ -323,7 +384,7 @@ public class WiringChecker {
                 if (!allFields && !fd.isFinal()) continue;
                 for (VariableDeclarator v : fd.getVariables()) {
                     if (v.getInitializer().isPresent()) continue;
-                    points.add(new InjectionPoint(cm.file, fd, v.getType(), v.getNameAsString(), fd.getAnnotations()));
+                    points.add(new InjectionPoint(cm, cm.file, fd, v.getType(), v.getNameAsString(), fd.getAnnotations()));
                 }
             }
         }
@@ -332,7 +393,7 @@ public class WiringChecker {
                     .anyMatch(a -> Set.of("Autowired", "Inject", "Resource").contains(simple(a.getNameAsString())));
             if (!autowired) continue;
             for (VariableDeclarator v : fd.getVariables()) {
-                points.add(new InjectionPoint(cm.file, fd, v.getType(), v.getNameAsString(), fd.getAnnotations()));
+                points.add(new InjectionPoint(cm, cm.file, fd, v.getType(), v.getNameAsString(), fd.getAnnotations()));
             }
         }
         return points;
@@ -366,10 +427,11 @@ public class WiringChecker {
         }
         if (AUTO_CONFIGURED.contains(typeName) || AUTO_CONFIGURED.contains(cit.getNameAsString())) return;
 
-        List<Candidate> candidates = candidatesFor(typeName);
+        String resolved = resolve(ip.ctx(), typeName);
+        List<Candidate> candidates = candidatesFor(resolved);
         if (candidates.isEmpty()) {
             if (!ownerChanged) return;
-            boolean projectType = bySimpleName.containsKey(typeName);
+            boolean projectType = byFqn.containsKey(resolved);
             String hint = typeName.equals("RestTemplate")
                     ? " Spring Boot auto-configures only RestTemplateBuilder: inject that and call build(), or declare "
                       + "a @Bean RestTemplate in a @Configuration class."
@@ -404,10 +466,11 @@ public class WiringChecker {
         }
     }
 
+    /** @param typeName a resolved type name (FQN for project types). */
     private List<Candidate> candidatesFor(String typeName) {
         List<Candidate> result = new ArrayList<>();
         for (ClassModel cm : classes) {
-            boolean assignable = cm.simpleName.equals(typeName) || supertypesOf(cm).contains(typeName);
+            boolean assignable = cm.fqn.equals(typeName) || supertypesOf(cm).contains(typeName);
             if (!assignable) continue;
             if (cm.isBeanClass()) {
                 result.add(new Candidate(cm.beanName(), cm.file, cm.hasAnnotation("Primary"), "class"));
@@ -416,12 +479,10 @@ public class WiringChecker {
             }
         }
         for (BeanMethod bm : beanMethods) {
-            String rt = bm.returnType();
+            String rt = resolve(bm.owner(), bm.rawReturnType());
             boolean assignable = rt.equals(typeName);
-            if (!assignable) {
-                for (ClassModel cm : bySimpleName.getOrDefault(rt, List.of())) {
-                    if (supertypesOf(cm).contains(typeName)) assignable = true;
-                }
+            if (!assignable && byFqn.containsKey(rt)) {
+                assignable = supertypesOf(byFqn.get(rt)).contains(typeName);
             }
             if (assignable) result.add(new Candidate(bm.beanName(), bm.file(), bm.primary(), "@Bean method"));
         }
@@ -434,15 +495,14 @@ public class WiringChecker {
         while (!queue.isEmpty()) {
             String t = queue.remove(queue.size() - 1);
             if (!seen.add(t)) continue;
-            for (ClassModel parent : bySimpleName.getOrDefault(t, List.of())) {
-                queue.addAll(parent.directSupertypes);
-            }
+            ClassModel parent = byFqn.get(t);
+            if (parent != null) queue.addAll(parent.directSupertypes);
         }
         return seen;
     }
 
     private boolean isSpringDataRepository(ClassModel cm) {
-        return supertypesOf(cm).stream().anyMatch(SPRING_DATA_REPOSITORIES::contains);
+        return supertypesOf(cm).stream().map(WiringChecker::simpleOf).anyMatch(SPRING_DATA_REPOSITORIES::contains);
     }
 
     // ------------------------------------------------------------------ @Value
@@ -591,7 +651,7 @@ public class WiringChecker {
             return;
         }
         boolean implemented = classes.stream()
-                .anyMatch(c -> !c.isInterface() && supertypesOf(c).contains(iface.simpleName));
+                .anyMatch(c -> !c.isInterface() && supertypesOf(c).contains(iface.fqn));
         if (!implemented) {
             report.findings.add(new Finding("unimplemented_interface", "ERROR", iface.file, iface.decl,
                     "Interface " + iface.simpleName + " was introduced but no class in the project implements it, "
@@ -673,34 +733,56 @@ public class WiringChecker {
         Set<String> types = new HashSet<>();
         for (ClassModel cm : classes) {
             if (!cm.isBeanClass()) continue;
-            for (InjectionPoint ip : injectionPoints(cm)) addTypeAndArgs(ip.type(), types);
+            for (InjectionPoint ip : injectionPoints(cm)) addTypeAndArgs(cm, ip.type(), types);
         }
         for (BeanMethod bm : beanMethods) {
-            for (Parameter p : bm.decl().getParameters()) addTypeAndArgs(p.getType(), types);
+            for (Parameter p : bm.decl().getParameters()) addTypeAndArgs(bm.owner(), p.getType(), types);
         }
         return types;
     }
 
-    private static void addTypeAndArgs(Type type, Set<String> into) {
-        into.add(typeName(type));
+    private void addTypeAndArgs(ClassModel ctx, Type type, Set<String> into) {
+        into.add(resolve(ctx, typeName(type)));
         if (type.isClassOrInterfaceType()) {
-            type.asClassOrInterfaceType().getTypeArguments().ifPresent(args -> args.forEach(a -> addTypeAndArgs(a, into)));
+            type.asClassOrInterfaceType().getTypeArguments()
+                    .ifPresent(args -> args.forEach(a -> addTypeAndArgs(ctx, a, into)));
         }
     }
 
     private void checkReachable(ClassModel cm, Set<String> injectedTypes, Report report) {
         if (!cm.isBeanClass() || !cm.hasAnnotation("Component", "Service", "Repository")) return;
         Set<String> names = new HashSet<>(supertypesOf(cm));
-        names.add(cm.simpleName);
+        names.add(cm.fqn);
         if (names.stream().anyMatch(injectedTypes::contains)) return;
-        if (names.stream().anyMatch(ENTRY_POINT_SUPERTYPES::contains)) return;
+        if (names.stream().map(WiringChecker::simpleOf).anyMatch(ENTRY_POINT_SUPERTYPES::contains)) return;
         boolean hasEntryMethod = cm.decl.getMethods().stream().anyMatch(m -> m.getAnnotations().stream()
                 .anyMatch(a -> ENTRY_POINT_METHOD_ANNOTATIONS.contains(simple(a.getNameAsString()))));
         if (hasEntryMethod) return;
         report.findings.add(new Finding("unreachable_integration", "ERROR", cm.file, cm.decl,
                 cm.simpleName + " is a Spring bean that nothing injects (no service, controller, router or @Bean "
                         + "method depends on it or on its interfaces), so the new integration can never be invoked. "
-                        + "Wire it into the service/controller/router that should use it."));
+                        + "Make it implement the interface the existing router/service already injects, or add a new "
+                        + "@Service/@RestController file that uses it (new files are allowed; unplanned existing "
+                        + "files are not editable)."));
+    }
+
+    /**
+     * A changed type that reuses the simple name of an existing, untouched
+     * project type in another package. Almost always a hallucinated import
+     * "fixed" by inventing a parallel type instead of using the real one.
+     */
+    private void checkDuplicateTypeName(ClassModel cm, Set<String> changed, Report report) {
+        if (cm.decl.isNestedType()) return;
+        for (ClassModel other : bySimpleName.getOrDefault(cm.simpleName, List.of())) {
+            if (other == cm || other.fqn.equals(cm.fqn) || other.decl.isNestedType() || changed.contains(other.file)) {
+                continue;
+            }
+            report.findings.add(new Finding("duplicate_type_name", "ERROR", cm.file, cm.decl,
+                    cm.fqn + " duplicates the name of existing type " + other.fqn + " (" + other.file + "). "
+                            + "Use the existing " + other.simpleName + " (import " + other.fqn + ") instead of "
+                            + "declaring a parallel one -- code depending on the original will never see this one."));
+            return;
+        }
     }
 
     private static boolean isOverride(MethodDeclaration m) {

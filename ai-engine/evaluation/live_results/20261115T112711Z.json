@@ -1,0 +1,354 @@
+{
+  "generated_at": "20261115T112711Z",
+  "models": [
+    "gpt-4o"
+  ],
+  "summary": {
+    "runs": 4,
+    "verified_rate": 0.5,
+    "real_integration_rate": 0.25,
+    "false_verified_rate": 0.5,
+    "existing_tests_broken": 0,
+    "provider_detection_correct": 1.0,
+    "status_counts": {
+      "UNRESOLVED_FAILURE": 2,
+      "VERIFIED": 2
+    },
+    "avg_prompt_tokens": 31887,
+    "avg_completion_tokens": 3351,
+    "avg_duration_seconds": 47.5
+  },
+  "runs": [
+    {
+      "case": "merchant-app",
+      "repeat": 1,
+      "run_id": "eval-merchant-app-1-2a6dc2",
+      "status": "UNRESOLVED_FAILURE",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "stripe"
+      ],
+      "expected_providers": [
+        "stripe"
+      ],
+      "files_created": [
+        "src/main/java/com/payshift/merchant/config/RazorpayClientConfig.java",
+        "src/main/java/com/payshift/merchant/provider/RazorpayApiPaymentGateway.java",
+        "src/main/java/com/payshift/merchant/provider/RazorpayPaymentGateway.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 2,
+        "build": 0
+      },
+      "static_findings_final": [
+        "ERROR:unreachable_integration"
+      ],
+      "tests": {
+        "tests_run": null,
+        "failures": null,
+        "errors": null
+      },
+      "hidden": {
+        "context_has_provider_bean": null,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/payshift/merchant/provider/RazorpayApiPaymentGateway.java: api.razorpay.com"
+        ],
+        "existing_tests_preserved": null,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "",
+        "integration_is_real": false
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 9,
+        "prompt_tokens": 30820,
+        "completion_tokens": 2924,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 2762,
+            "completion_tokens": 276
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 6001,
+            "completion_tokens": 750
+          },
+          "generate_code": {
+            "calls": 3,
+            "prompt_tokens": 15165,
+            "completion_tokens": 649
+          },
+          "diagnose_failures": {
+            "calls": 2,
+            "prompt_tokens": 2859,
+            "completion_tokens": 293
+          },
+          "repair_code": {
+            "calls": 2,
+            "prompt_tokens": 4033,
+            "completion_tokens": 956
+          }
+        }
+      },
+      "duration_seconds": 32.3,
+      "workspace": "/app/workspaces/eval-merchant-app-1-2a6dc2/modified"
+    },
+    {
+      "case": "stripe-direct-checkout",
+      "repeat": 1,
+      "run_id": "eval-stripe-direct-checkout-1-a7b705",
+      "status": "VERIFIED",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "stripe"
+      ],
+      "expected_providers": [
+        "stripe"
+      ],
+      "files_created": [
+        "src/main/java/com/acme/checkout/config/RazorpayConfig.java",
+        "src/main/java/com/acme/checkout/provider/RazorpayPaymentProvider.java",
+        "src/main/java/com/acme/checkout/provider/impl/RazorpayPaymentProviderImpl.java"
+      ],
+      "files_modified": [
+        "src/main/java/com/acme/checkout/web/CheckoutController.java"
+      ],
+      "repairs": {
+        "static": 2,
+        "build": 1
+      },
+      "static_findings_final": [],
+      "tests": {
+        "tests_run": 5,
+        "failures": 0,
+        "errors": 0
+      },
+      "hidden": {
+        "context_has_provider_bean": true,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/acme/checkout/provider/impl/RazorpayPaymentProviderImpl.java: api.razorpay.com"
+        ],
+        "existing_tests_preserved": true,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "iator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)\n2026-11-15T11:10:14.181Z  INFO 392 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'\n2026-11-15T11:10:14.860Z  INFO 392 --- [           main] c.a.c.PayShiftHiddenWiringCheckTest      : Started PayShiftHiddenWiringCheckTest in 3.285 seconds (process running for 6.242)\n2026-11-15T11:10:15.351Z  INFO 392 --- [ionShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'\n2026-11-15T11:10:15.354Z  INFO 392 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...\n2026-11-15T11:10:15.357Z  INFO 392 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.\n\nWARNING: A Java agent has been loaded dynamically (/root/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar)\nWARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning\nWARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information\nWARNING: Dynamic loading of agents will be disallowed by default in a future release\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n",
+        "integration_is_real": true
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 12,
+        "prompt_tokens": 33908,
+        "completion_tokens": 3652,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 1620,
+            "completion_tokens": 221
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 2905,
+            "completion_tokens": 523
+          },
+          "generate_code": {
+            "calls": 4,
+            "prompt_tokens": 14461,
+            "completion_tokens": 1533
+          },
+          "diagnose_failures": {
+            "calls": 3,
+            "prompt_tokens": 7005,
+            "completion_tokens": 349
+          },
+          "repair_code": {
+            "calls": 3,
+            "prompt_tokens": 7917,
+            "completion_tokens": 1026
+          }
+        }
+      },
+      "duration_seconds": 51.7,
+      "workspace": "/app/workspaces/eval-stripe-direct-checkout-1-a7b705/modified"
+    },
+    {
+      "case": "razorpay-rest-orders",
+      "repeat": 1,
+      "run_id": "eval-razorpay-rest-orders-1-5027a6",
+      "status": "UNRESOLVED_FAILURE",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "razorpay"
+      ],
+      "expected_providers": [
+        "razorpay"
+      ],
+      "files_created": [
+        "src/main/java/com/shop/orders/config/StripeConfiguration.java",
+        "src/main/java/com/shop/orders/payments/StripePaymentProvider.java",
+        "src/main/java/com/shop/orders/payments/StripePaymentProviderImpl.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 2,
+        "build": 0
+      },
+      "static_findings_final": [
+        "WARNING:stub_method",
+        "ERROR:stub_method",
+        "ERROR:unreachable_integration"
+      ],
+      "tests": {
+        "tests_run": null,
+        "failures": null,
+        "errors": null
+      },
+      "hidden": {
+        "context_has_provider_bean": null,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/shop/orders/payments/StripePaymentProviderImpl.java: api.stripe.com"
+        ],
+        "existing_tests_preserved": null,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "",
+        "integration_is_real": false
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 9,
+        "prompt_tokens": 38864,
+        "completion_tokens": 3706,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 1512,
+            "completion_tokens": 256
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 6785,
+            "completion_tokens": 573
+          },
+          "generate_code": {
+            "calls": 3,
+            "prompt_tokens": 23743,
+            "completion_tokens": 863
+          },
+          "diagnose_failures": {
+            "calls": 2,
+            "prompt_tokens": 3629,
+            "completion_tokens": 244
+          },
+          "repair_code": {
+            "calls": 2,
+            "prompt_tokens": 3195,
+            "completion_tokens": 1770
+          }
+        }
+      },
+      "duration_seconds": 40.8,
+      "workspace": "/app/workspaces/eval-razorpay-rest-orders-1-5027a6/modified"
+    },
+    {
+      "case": "multi-psp-router",
+      "repeat": 1,
+      "run_id": "eval-multi-psp-router-1-9ffd8b",
+      "status": "VERIFIED",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "stripe",
+        "paypal"
+      ],
+      "expected_providers": [
+        "paypal",
+        "stripe"
+      ],
+      "files_created": [
+        "src/main/java/com/payments/router/config/RazorpayClientConfig.java",
+        "src/main/java/com/payments/router/model/PaymentStatus.java",
+        "src/main/java/com/payments/router/model/RefundRequest.java",
+        "src/main/java/com/payments/router/model/RefundResponse.java",
+        "src/main/java/com/payments/router/provider/RazorpayProvider.java",
+        "src/main/java/com/payments/router/spi/PaymentProvider.java"
+      ],
+      "files_modified": [
+        "src/main/java/com/payments/router/config/ProviderClientsConfig.java"
+      ],
+      "repairs": {
+        "static": 1,
+        "build": 1
+      },
+      "static_findings_final": [],
+      "tests": {
+        "tests_run": 4,
+        "failures": 0,
+        "errors": 0
+      },
+      "hidden": {
+        "context_has_provider_bean": false,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/payments/router/provider/RazorpayProvider.java: api.razorpay.com"
+        ],
+        "existing_tests_preserved": true,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "FAILED: 'razorpay' beans exist but nothing depends on them: [razorpayProvider] ==> expected: <false> but was: <true>",
+        "integration_is_real": false
+      },
+      "false_verified": true,
+      "llm_usage": {
+        "calls": 9,
+        "prompt_tokens": 23955,
+        "completion_tokens": 3122,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 2202,
+            "completion_tokens": 314
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 3020,
+            "completion_tokens": 536
+          },
+          "generate_code": {
+            "calls": 3,
+            "prompt_tokens": 10870,
+            "completion_tokens": 868
+          },
+          "diagnose_failures": {
+            "calls": 2,
+            "prompt_tokens": 4198,
+            "completion_tokens": 219
+          },
+          "repair_code": {
+            "calls": 2,
+            "prompt_tokens": 3665,
+            "completion_tokens": 1185
+          }
+        }
+      },
+      "duration_seconds": 65.3,
+      "workspace": "/app/workspaces/eval-multi-psp-router-1-9ffd8b/modified"
+    }
+  ]
+}

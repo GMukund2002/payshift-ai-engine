@@ -34,6 +34,7 @@ _MISSING_CLASS = re.compile(
 )
 _MISSING_PACKAGE = re.compile(r"package\s+(?P<pkg>[a-z_][\w.]*)\s+does not exist")
 _IMPORT_LINE = re.compile(r"^\s*import\s+(?:static\s+)?(?P<fqn>[\w.]+)\s*;", re.MULTILINE)
+_PACKAGE_LINE = re.compile(r"^\s*package\s+(?P<pkg>[\w.]+)\s*;", re.MULTILINE)
 
 # Common JDK types (not in dependency jars) that generated code often uses.
 _JDK_HINTS = {
@@ -93,10 +94,37 @@ def build_classpath_index(project_dir: Path, run_maven) -> dict[str, list[str]]:
     return result
 
 
+def project_class_index(workspace: Path) -> dict[str, list[str]]:
+    """simple name -> FQNs of the project's own top-level types (src/main/java).
+    Found necessary in a live eval run: generation imported the app's own
+    PaymentProvider from an invented package, and with only dependency jars
+    indexed the hint could not say where the real one lives -- so a repair
+    invented a parallel interface instead."""
+    index: dict[str, set[str]] = {}
+    for java in Path(workspace).rglob("*.java"):
+        rel = java.relative_to(workspace).as_posix()
+        if "src/main/java/" not in rel or "/target/" in f"/{rel}":
+            continue
+        try:
+            m = _PACKAGE_LINE.search(java.read_text(encoding="utf-8", errors="replace"))
+        except OSError:
+            continue
+        fqn = f"{m.group('pkg')}.{java.stem}" if m else java.stem
+        index.setdefault(java.stem, set()).add(fqn)
+    return {k: sorted(v) for k, v in index.items()}
+
+
 def hints_for_compile_failure(output: str, index: dict[str, list[str]], workspace: Path | None = None) -> list[str]:
     """Turns "cannot find symbol: class X" / "package P does not exist" errors
-    into concrete, classpath-backed instructions."""
+    into concrete instructions backed by the project's real classpath and its
+    own sources (project types take precedence)."""
     text = strip_ansi(output)
+    if workspace is not None:
+        project = project_class_index(workspace)
+        index = {**index, **{k: v for k, v in project.items()}}
+        project_fqns = {fqn for v in project.values() for fqn in v}
+    else:
+        project_fqns = set()
     hints: list[str] = []
     seen: set[str] = set()
 
@@ -105,7 +133,7 @@ def hints_for_compile_failure(output: str, index: dict[str, list[str]], workspac
         if cls in seen:
             continue
         seen.add(cls)
-        hints.append(_hint_for_class(cls, location, index))
+        hints.append(_hint_for_class(cls, location, index, project_fqns))
 
     for m in _MISSING_PACKAGE.finditer(text):
         pkg = m.group("pkg")
@@ -118,16 +146,21 @@ def hints_for_compile_failure(output: str, index: dict[str, list[str]], workspac
             for cls in classes:
                 if cls not in seen:
                     seen.add(cls)
-                    hints.append(_hint_for_class(cls, f"package {pkg}", index))
+                    hints.append(_hint_for_class(cls, f"package {pkg}", index, project_fqns))
         else:
             hints.append(f"Package {pkg} is not on this project's classpath. Use only libraries already "
                          f"declared in pom.xml (build files are not editable).")
     return hints
 
 
-def _hint_for_class(cls: str, location: str, index: dict[str, list[str]]) -> str:
+def _hint_for_class(cls: str, location: str, index: dict[str, list[str]], project_fqns: set[str] | None = None) -> str:
     candidates = index.get(cls) or ([_JDK_HINTS[cls]] if cls in _JDK_HINTS else [])
     wrong_pkg = location.removeprefix("package ").strip() if location.startswith("package ") else None
+    if candidates and any(c in (project_fqns or set()) for c in candidates):
+        where = ", ".join(c for c in candidates if c in project_fqns)
+        return (f"{cls} already exists in this project as {where}"
+                + (f" (not in package {wrong_pkg})" if wrong_pkg else "")
+                + ". Import and use that existing type; do NOT create a new class or interface named " + cls + ".")
     if candidates:
         where = ", ".join(candidates[:3])
         if wrong_pkg:

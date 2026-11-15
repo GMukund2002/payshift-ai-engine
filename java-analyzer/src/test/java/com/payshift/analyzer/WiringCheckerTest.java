@@ -242,6 +242,58 @@ class WiringCheckerTest {
     }
 
     @Test
+    void anAdapterForAParallelSameNamedInterfaceIsNotReachableThroughTheRealOne() throws IOException {
+        // Live eval run eval-multi-psp-router-1: generation imported PaymentProvider from an
+        // invented package, and a repair "fixed" the compile error by declaring a second
+        // interface with that name there. The router injects List<the real PaymentProvider>,
+        // so the new adapter is never routed to -- yet simple-name matching called it reachable.
+        write(PKG + "provider/PaymentProvider.java", """
+                package com.acme.provider;
+                public interface PaymentProvider { String id(); }
+                """);
+        write(PKG + "provider/ProviderRouter.java", """
+                package com.acme.provider;
+                import java.util.List;
+                import org.springframework.stereotype.Component;
+                @Component
+                public class ProviderRouter {
+                    private final List<PaymentProvider> providers;
+                    public ProviderRouter(List<PaymentProvider> providers) { this.providers = providers; }
+                    @org.springframework.web.bind.annotation.GetMapping("/p") public int n() { return providers.size(); }
+                }
+                """);
+        String parallel = PKG + "spi/PaymentProvider.java";
+        String adapter = PKG + "provider/RazorpayProvider.java";
+        write(parallel, """
+                package com.acme.spi;
+                public interface PaymentProvider { String id(); }
+                """);
+        write(adapter, """
+                package com.acme.provider;
+                import com.acme.spi.PaymentProvider;
+                import org.springframework.stereotype.Component;
+                @Component
+                public class RazorpayProvider implements PaymentProvider { public String id() { return "razor" + "pay"; } }
+                """);
+
+        WiringChecker.Report r = check(parallel, adapter);
+
+        assertThat(errors(r, "unreachable_integration")).singleElement().asString().contains("RazorpayProvider");
+        assertThat(errors(r, "duplicate_type_name")).singleElement().asString()
+                .contains("com.acme.spi.PaymentProvider").contains("com.acme.provider.PaymentProvider");
+
+        // The correct version -- implement the existing port -- is reachable and raises nothing.
+        write(adapter, """
+                package com.acme.provider;
+                import org.springframework.stereotype.Component;
+                @Component
+                public class RazorpayProvider implements PaymentProvider { public String id() { return "razor" + "pay"; } }
+                """);
+        Files.delete(repo.resolve(parallel));
+        assertThat(check(adapter).findings).isEmpty();
+    }
+
+    @Test
     void beansInjectedOnlyAsListElementsAreReachable() throws IOException {
         baseApp();
         write(PKG + "provider/PaymentProvider.java", """

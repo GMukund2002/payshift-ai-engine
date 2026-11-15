@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 
 from agent.state import AgentState
 from llm.client import LLMClient, LLMNotConfiguredError
@@ -58,7 +59,7 @@ def understand_architecture(state: AgentState, llm: LLMClient) -> dict:
 
     known_files = {pc["file"] for pc in analysis.get("paymentClasses", [])} | {
         op["sourceFile"] for op in analysis.get("paymentOperations", [])
-    }
+    } | _repository_files(state.get("repository_path"))
     cited = raw.get("file_references", [])
     verified = [f for f in cited if f in known_files]
     dropped = set(cited) - set(verified)
@@ -67,6 +68,18 @@ def understand_architecture(state: AgentState, llm: LLMClient) -> dict:
     raw["file_references"] = verified
 
     return {"architecture_findings": raw}
+
+
+def _repository_files(repository_path: str | None) -> set[str]:
+    """Every source/config file that really exists -- a citation of one of
+    these is not a hallucination even if the analyzer didn't flag it as
+    payment-related (e.g. a @Configuration class building the SDK client)."""
+    if not repository_path or not Path(repository_path).is_dir():
+        return set()
+    root = Path(repository_path)
+    return {p.relative_to(root).as_posix() for p in root.rglob("*")
+            if p.is_file() and p.suffix in (".java", ".yml", ".yaml", ".properties", ".xml")
+            and "target" not in p.relative_to(root).parts}
 
 
 _BUSINESS_INTENT_BY_OPERATION = {

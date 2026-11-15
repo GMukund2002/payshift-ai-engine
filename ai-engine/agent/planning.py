@@ -47,6 +47,12 @@ required_changes), not just left alone by omission. Strongly prefer ADDITIVE cha
 service, controller, configuration classes) over modifying existing services/controllers: every \
 existing test boots the full Spring ApplicationContext, so a new constructor dependency added to an \
 existing class breaks every existing test if anything about the new provider fails to wire.
+- The new provider MUST be reachable from the application's existing entry points -- an adapter \
+that nothing calls is rejected by automated checks. Either (a) implement the EXACT existing interface \
+that an existing router/service already injects (e.g. a List<PaymentProvider>), using its real fully \
+qualified name, so it is picked up with no other change; or (b) plan the new @Service and \
+@RestController files that use the new adapter. Never plan a new interface with the same name as an \
+existing type.
 - If files_to_create contains an interface, it MUST also contain a class implementing it. If the new \
 provider's client needs an HTTP client bean (RestTemplate/RestClient/WebClient), plan a \
 @Configuration class that defines it -- Spring Boot does not auto-configure those.

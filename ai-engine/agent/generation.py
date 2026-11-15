@@ -26,6 +26,7 @@ from pathlib import Path
 
 from agent.state import AgentState
 from llm.client import LLMClient, LLMNotConfiguredError
+from tools.compile_diagnostics import project_class_index
 
 logger = logging.getLogger("payshift.agent.generation")
 
@@ -114,6 +115,7 @@ def generate_code(state: AgentState, llm: LLMClient) -> dict:
 
     relevant_docs = {op: retrieved[op] for op in actionable_ops if op in retrieved}
     app_config = _read_application_config(repository_path)
+    project_types = sorted(fqn for fqns in project_class_index(repository_path).values() for fqn in fqns)[:400]
 
     # One LLM call per planned file, new files before modifications to existing ones,
     # so a call generating (say) a controller edit can see the actual content of the
@@ -133,6 +135,7 @@ def generate_code(state: AgentState, llm: LLMClient) -> dict:
             relevant_docs=relevant_docs,
             already_generated=generated,
             app_config=app_config,
+            project_types=project_types,
         )
         if outcome.get("blocked"):
             # Partial progress is reported alongside the block so a caller can see
@@ -166,6 +169,7 @@ def _read_application_config(repository_path: Path) -> dict[str, str]:
 def _generate_one_file(
     *, llm: LLMClient, plan: dict, target: dict, modify_context: dict[str, str],
     relevant_docs: dict, already_generated: dict[str, str], app_config: dict[str, str] | None = None,
+    project_types: list[str] | None = None,
 ) -> dict:
     path = target["path"]
 
@@ -174,6 +178,12 @@ def _generate_one_file(
         + json.dumps(plan, indent=2),
         "\n\nTARGET FILE TO GENERATE NOW:\n" + json.dumps(target, indent=2),
     ]
+    if project_types:
+        user_prompt_parts.append(
+            "\n\nEXISTING PROJECT TYPES (fully qualified -- import existing types from exactly these packages; "
+            "never invent a package, and never declare a new type with one of these simple names):\n"
+            + "\n".join(project_types)
+        )
     if app_config:
         user_prompt_parts.append(
             "\n\nEXISTING APPLICATION CONFIG (keys a @Value placeholder may reference without a default):\n"

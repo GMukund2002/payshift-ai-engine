@@ -78,3 +78,19 @@ def test_real_compile_of_the_live_run_config_produces_the_classpath_hint():
     assert result.success is False
     assert "\x1b[" not in result.raw_output_tail          # batch mode / stripped: no color codes
     assert any("org.springframework.boot.web.client.RestTemplateBuilder" in h for h in result.hints), result.hints
+
+
+def test_hint_points_at_the_projects_own_type_not_a_new_one(tmp_path):
+    # Live eval run eval-multi-psp-router-1: the app's own PaymentProvider was imported from
+    # an invented package; the repair then created a parallel interface instead of fixing it.
+    src = tmp_path / "src/main/java/com/payments/router/provider"
+    src.mkdir(parents=True)
+    (src / "PaymentProvider.java").write_text("package com.payments.router.provider;\npublic interface PaymentProvider {}\n")
+    output = ("[ERROR] /w/src/main/java/com/payments/router/provider/RazorpayProvider.java:[7,35] "
+              "package com.payments.router.spi does not exist\n")
+    (src / "RazorpayProvider.java").write_text(
+        "package com.payments.router.provider;\nimport com.payments.router.spi.PaymentProvider;\nclass RazorpayProvider {}\n")
+    hints = hints_for_compile_failure(output, {}, workspace=tmp_path)
+    assert hints == ["PaymentProvider already exists in this project as com.payments.router.provider.PaymentProvider "
+                     "(not in package com.payments.router.spi). Import and use that existing type; do NOT create a new "
+                     "class or interface named PaymentProvider."]
