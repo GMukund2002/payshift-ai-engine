@@ -125,7 +125,7 @@ def test_full_add_psp_pipeline_end_to_end():
         "run_id": run_id,
     }
 
-    final_state = graph.invoke(initial_state, config={"recursion_limit": 50})
+    final_state = graph.invoke(initial_state, config={"recursion_limit": 100})
 
     assert final_state.get("blocked") is not True, final_state.get("blocker_reason")
     assert final_state["existing_providers"] == ["stripe"]

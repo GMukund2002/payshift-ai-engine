@@ -153,7 +153,7 @@ def test_graph_repairs_a_static_check_failure_then_verifies_for_real():
     final = build_graph(llm).invoke({
         "repository_path": str(MERCHANT_APP), "operation_mode": "ADD_PSP", "target_provider": "razorpay",
         "target_provider_doc_url": None, "run_id": "sc-graph-" + uuid.uuid4().hex[:8],
-    }, config={"recursion_limit": 60})
+    }, config={"recursion_limit": 100})
 
     assert final["final_status"] == "VERIFIED", final.get("report")
     assert final.get("static_repair_count") == 1

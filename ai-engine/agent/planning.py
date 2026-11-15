@@ -118,6 +118,8 @@ def create_plan(state: AgentState, llm: LLMClient) -> dict:
         raw.get("files_to_create", []), raw.get("files_to_modify", []), state.get("repository_path"),
     )
 
+    files_to_create = _ensure_entry_point(state, raw, files_to_create, files_to_modify)
+
     try:
         plan = IntegrationPlan(
             operation_mode=state["operation_mode"],
@@ -142,6 +144,36 @@ def create_plan(state: AgentState, llm: LLMClient) -> dict:
         return {"blocked": True, "blocker_reason": f"Planning produced an invalid plan: {e}"}
 
     return {"integration_plan": plan.model_dump(), "capability_model": capability_model}
+
+
+_ENTRY_POINT_SUFFIXES = ("Controller.java", "Service.java", "Router.java", "Listener.java", "Resource.java")
+
+
+def _ensure_entry_point(state: AgentState, raw: dict, creates: list[FileChange],
+                        modifies: list[FileChange]) -> list[FileChange]:
+    """An ADD_PSP plan that neither plugs into an existing injected abstraction nor
+    contains anything that calls the new adapter produces an integration nothing can
+    invoke -- the most common live-eval failure (the unreachable_integration static
+    check then rejects it, and repairs rarely invent the missing caller). Add a
+    controller to such a plan deterministically, labeled as added by PayShift."""
+    if state.get("operation_mode") != "ADD_PSP" or raw.get("reuse_existing_abstraction") or modifies:
+        return creates
+    main_creates = [c for c in creates if not is_test_source_path(c.path)]
+    if not main_creates or any(c.path.endswith(_ENTRY_POINT_SUFFIXES) for c in main_creates):
+        return creates
+    repo = state.get("repository_path")
+    bases = spring_boot_base_packages(Path(repo)) if repo and Path(repo).is_dir() else []
+    if not bases:
+        return creates
+    provider = "".join(part.capitalize() for part in str(state["target_provider"]).replace("-", "_").split("_"))
+    path = f"src/main/java/{bases[0].replace('.', '/')}/web/{provider}PaymentController.java"
+    logger.warning("Plan had no entry point for the new provider; adding %s", path)
+    return creates + [FileChange(
+        path=path, change_type="CREATE",
+        reason=(f"[added by PayShift: the plan had no caller for the new adapter] REST controller exposing "
+                f"{state['target_provider']} payment operations (create, status, refund) by injecting the new "
+                f"adapter/service generated in this run, mirroring the existing payment controller's style."),
+    )]
 
 
 def _normalize_file_changes(

@@ -751,7 +751,11 @@ public class WiringChecker {
     }
 
     private void checkReachable(ClassModel cm, Set<String> injectedTypes, Report report) {
-        if (!cm.isBeanClass() || !cm.hasAnnotation("Component", "Service", "Repository")) return;
+        if (!cm.isBeanClass()) {
+            checkNonBeanImplementationIsCreated(cm, report);
+            return;
+        }
+        if (!cm.hasAnnotation("Component", "Service", "Repository")) return;
         Set<String> names = new HashSet<>(supertypesOf(cm));
         names.add(cm.fqn);
         if (names.stream().anyMatch(injectedTypes::contains)) return;
@@ -825,6 +829,32 @@ public class WiringChecker {
                             + "declaring a parallel one -- code depending on the original will never see this one."));
             return;
         }
+    }
+
+    /**
+     * A new concrete class implementing a project interface that is not a bean,
+     * not returned by any @Bean method, and never instantiated anywhere can
+     * never run. Live eval run eval-multi-psp-router-2: a repair removed
+     * @Component from RazorpayProvider (to dodge an injection error), leaving
+     * an implementation of PaymentProvider that nothing ever created -- compile
+     * and tests passed, and Razorpay did not exist at runtime.
+     */
+    private void checkNonBeanImplementationIsCreated(ClassModel cm, Report report) {
+        if (cm.isInterface() || cm.decl.isAbstract() || cm.decl.isNestedType()) return;
+        boolean implementsProjectInterface = cm.directSupertypes.stream()
+                .map(byFqn::get).anyMatch(t -> t != null && t.isInterface());
+        if (!implementsProjectInterface) return;
+        boolean returnedByBeanMethod = beanMethods.stream()
+                .anyMatch(bm -> resolve(bm.owner(), bm.rawReturnType()).equals(cm.fqn));
+        boolean instantiated = classes.stream().filter(c -> c != cm).anyMatch(c ->
+                c.decl.findAll(ObjectCreationExpr.class).stream()
+                        .anyMatch(o -> resolve(c, o.getType().getNameWithScope()).equals(cm.fqn)));
+        if (returnedByBeanMethod || instantiated) return;
+        report.findings.add(new Finding("unreachable_integration", "ERROR", cm.file, cm.decl,
+                cm.simpleName + " implements " + cm.directSupertypes.stream().map(WiringChecker::simpleOf).toList()
+                        + " but is not a Spring bean (no @Component/@Service), no @Bean method returns it, and "
+                        + "nothing instantiates it -- so it never runs. Annotate it @Component (with injectable "
+                        + "constructor parameters: beans, or @Value(\"${key:default}\") for config values)."));
     }
 
     private static boolean isOverride(MethodDeclaration m) {

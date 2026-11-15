@@ -47,7 +47,7 @@ def run_case(case: EvalCase, repeat: int) -> dict:
         final = build_graph(llm).invoke({
             "repository_path": str(case.path.resolve()), "operation_mode": case.operation_mode,
             "target_provider": case.target_provider, "target_provider_doc_url": None, "run_id": run_id,
-        }, config={"recursion_limit": 60})
+        }, config={"recursion_limit": 100})
     except Exception as e:  # a crash is a result too -- record it, don't hide it
         logger.exception("Run %s crashed", run_id)
         error = f"{type(e).__name__}: {e}"

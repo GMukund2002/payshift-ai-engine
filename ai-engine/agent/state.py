@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
-MAX_REPAIR_ATTEMPTS = 2          # compile/test failures
-MAX_STATIC_REPAIR_ATTEMPTS = 2   # deterministic pre-compile check failures (separate budget)
+MAX_REPAIR_ATTEMPTS = 3          # compile/test failures
+MAX_STATIC_REPAIR_ATTEMPTS = 3   # deterministic pre-compile check failures (separate budget)
 
 
 class AgentState(TypedDict, total=False):

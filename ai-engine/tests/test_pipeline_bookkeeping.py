@@ -19,6 +19,7 @@ import pytest
 
 from agent.apply_patch import apply_patch
 from agent.graph import _route_after_repair
+from agent.state import MAX_REPAIR_ATTEMPTS
 from agent.planning import _normalize_file_changes
 from agent.repair import diagnose_failures, repair_code
 from agent.reporting import generate_report
@@ -131,7 +132,7 @@ def test_noop_repair_is_recorded_and_skips_recompile():
 
     state.update(result)
     assert _route_after_repair(state) == "diagnose_failures"   # budget left: re-diagnose, don't recompile
-    state["repair_count"] = 2
+    state["repair_count"] = MAX_REPAIR_ATTEMPTS
     assert _route_after_repair(state) == "generate_report"     # budget gone: stop
 
 

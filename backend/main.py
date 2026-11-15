@@ -217,7 +217,7 @@ def _execute_pipeline_inner(run_id: str, repository_path: str, req: "RunRequest"
     try:
         llm = get_llm_client()
         graph = build_graph(llm)
-        for event in graph.stream(initial_state, config={"recursion_limit": 50}):
+        for event in graph.stream(initial_state, config={"recursion_limit": 100}):
             for node_name, update in event.items():
                 accumulated.update(update)
                 nodes_completed.append({

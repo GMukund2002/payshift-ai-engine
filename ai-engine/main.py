@@ -40,7 +40,7 @@ def main():
 
     print(f"Starting run {run_id}: {args.mode} -> {args.target_provider}")
     final_state = {}
-    for event in graph.stream(initial_state, config={"recursion_limit": 50}):
+    for event in graph.stream(initial_state, config={"recursion_limit": 100}):
         for node_name, update in event.items():
             final_state.update(update)
             print(f"  [{node_name}] done" + (f" -- BLOCKED: {update['blocker_reason']}" if update.get("blocked") else ""))

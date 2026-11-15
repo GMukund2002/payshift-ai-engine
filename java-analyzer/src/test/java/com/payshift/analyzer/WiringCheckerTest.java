@@ -320,6 +320,39 @@ class WiringCheckerTest {
     }
 
     @Test
+    void anImplementationThatIsNeitherABeanNorEverCreatedIsUnreachable() throws IOException {
+        // Live eval run eval-multi-psp-router-2: a repair dropped @Component from RazorpayProvider.
+        write(PKG + "provider/PaymentProvider.java", """
+                package com.acme.provider;
+                public interface PaymentProvider { String id(); }
+                """);
+        String impl = PKG + "provider/RazorpayProvider.java";
+        write(impl, """
+                package com.acme.provider;
+                public class RazorpayProvider implements PaymentProvider {
+                    private final String baseUrl;
+                    public RazorpayProvider(String baseUrl) { this.baseUrl = baseUrl; }
+                    public String id() { return baseUrl.isEmpty() ? "razorpay" : "razorpay:" + baseUrl; }
+                }
+                """);
+        assertThat(errors(check(impl), "unreachable_integration")).singleElement().asString()
+                .contains("RazorpayProvider").contains("not a Spring bean");
+
+        // Created by a @Bean method instead: fine.
+        write(PKG + "config/RazorpayBeans.java", """
+                package com.acme.config;
+                import com.acme.provider.RazorpayProvider;
+                @Configuration
+                public class RazorpayBeans {
+                    @Bean RazorpayProvider razorpayProvider(@Value("${razorpay.base-url:https://api.razorpay.com}") String url) {
+                        return new RazorpayProvider(url);
+                    }
+                }
+                """);
+        assertThat(errors(check(impl), "unreachable_integration")).isEmpty();
+    }
+
+    @Test
     void beansInjectedOnlyAsListElementsAreReachable() throws IOException {
         baseApp();
         write(PKG + "provider/PaymentProvider.java", """

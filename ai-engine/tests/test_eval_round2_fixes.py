@@ -8,7 +8,8 @@ from pathlib import Path
 
 from agent.apply_patch import apply_patch
 from agent.generation import generate_code
-from agent.planning import _normalize_file_changes
+from agent.planning import _ensure_entry_point, _normalize_file_changes
+from schemas.plans import FileChange
 from agent.static_checks import static_checks
 from tests.fakes import FakeLLMClient
 
@@ -103,3 +104,20 @@ def test_repair_can_delete_files_this_run_created_but_never_original_files():
     assert Path(state["workspace_path"], original).exists()
     assert state["applied_changes"] == {"created": [], "modified": []}
     assert state["rejected_patch_files"] == [{"path": original, "reason": "only files created in this run can be deleted"}]
+
+
+def test_plan_without_any_caller_for_the_new_adapter_gets_an_entry_point():
+    # Round 3: merchant-app-2 and stripe-direct-checkout-2 planned only an adapter + config;
+    # unreachable_integration then exhausted the static repair budget.
+    state = {"operation_mode": "ADD_PSP", "target_provider": "razorpay", "repository_path": str(CHECKOUT_APP)}
+    creates = [FileChange(path="src/main/java/com/acme/checkout/payment/RazorpayAdapter.java", reason="r", change_type="CREATE")]
+    out = _ensure_entry_point(state, {"reuse_existing_abstraction": False}, creates, [])
+    assert out[-1].path == "src/main/java/com/acme/checkout/web/RazorpayPaymentController.java"
+    assert out[-1].reason.startswith("[added by PayShift")
+
+    # Not added when the plan already has a caller, reuses an injected abstraction, or modifies existing code.
+    with_controller = creates + [FileChange(path="src/main/java/com/acme/checkout/web/RzpController.java", reason="r", change_type="CREATE")]
+    assert _ensure_entry_point(state, {"reuse_existing_abstraction": False}, with_controller, []) == with_controller
+    assert _ensure_entry_point(state, {"reuse_existing_abstraction": True}, creates, []) == creates
+    modify = [FileChange(path="src/main/java/com/acme/checkout/web/CheckoutController.java", reason="r", change_type="MODIFY")]
+    assert _ensure_entry_point(state, {"reuse_existing_abstraction": False}, creates, modify) == creates

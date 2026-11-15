@@ -234,7 +234,7 @@ elif st.session_state.step in (6, 7):
         log_box = st.container()
         accumulated = dict(initial_state)
         with st.spinner("Running LangGraph pipeline..."):
-            for event in graph.stream(initial_state, config={"recursion_limit": 50}):
+            for event in graph.stream(initial_state, config={"recursion_limit": 100}):
                 for node_name, update in event.items():
                     accumulated.update(update)
                     with log_box:
