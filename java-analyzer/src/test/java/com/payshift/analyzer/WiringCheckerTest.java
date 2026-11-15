@@ -334,6 +334,23 @@ class WiringCheckerTest {
     }
 
     @Test
+    void providerCalledViaRawRestApiIsDetectedFromItsApiHost() throws IOException {
+        write(PKG + "gateway/RazorpayGateway.java", """
+                package com.acme.gateway;
+                @Component
+                public class RazorpayGateway {
+                    private static final String BASE = "https://api.razorpay.com/v1";
+                    public String createPayment(long amount) { return rest.post(BASE + "/orders", amount); }
+                }
+                """);
+        JavaSourceAnalyzer.Result result = new JavaSourceAnalyzer(ProviderRegistry.loadDefault()).analyze(repo);
+        assertThat(result.detectedProviders).anyMatch(p -> p.name.equals("razorpay")
+                && p.evidence.stream().anyMatch(e -> e.startsWith("api_endpoint:")));
+        assertThat(result.paymentOperations).anyMatch(op -> op.operation.equals("CREATE_PAYMENT")
+                && "razorpay".equals(op.provider));
+    }
+
+    @Test
     void entityAccessorsAreNotPaymentOperations() throws IOException {
         write(PKG + "domain/Payment.java", """
                 package com.acme.domain;

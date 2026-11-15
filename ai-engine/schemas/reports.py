@@ -16,6 +16,9 @@ class CompilationResult(BaseModel):
     success: bool
     raw_output_tail: str
     duration_seconds: float
+    # Deterministic, classpath-backed fix hints for a failed compile (e.g. the
+    # real package of a class imported from the wrong one).
+    hints: list[str] = Field(default_factory=list)
 
 
 class TestRunResult(BaseModel):

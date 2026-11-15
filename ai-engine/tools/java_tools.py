@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from schemas.reports import CompilationResult, TestCaseResult, TestRunResult
+from tools.compile_diagnostics import build_classpath_index, hints_for_compile_failure, strip_ansi
 
 logger = logging.getLogger("payshift.tools.java")
 
@@ -30,7 +31,9 @@ DEFAULT_MAVEN_OPTS = "-Xmx256m"
 
 
 def _run_maven(project_dir: Path, goals: list[str], timeout_seconds: int) -> tuple[int, str, float]:
-    cmd = ["mvn"]
+    # -B (batch mode): no ANSI color codes or download progress noise in the
+    # output that gets parsed, stored in reports and sent to the LLM.
+    cmd = ["mvn", "-B"]
     if MAVEN_SETTINGS.exists():
         cmd += ["-s", str(MAVEN_SETTINGS)]
     cmd += goals
@@ -49,10 +52,21 @@ def _run_maven(project_dir: Path, goals: list[str], timeout_seconds: int) -> tup
         return 124, output + f"\n[TIMED OUT after {timeout_seconds}s]", duration
 
 
-def compile_project(project_dir: Path | str) -> CompilationResult:
+def compile_project(project_dir: Path | str, with_hints: bool = False) -> CompilationResult:
+    """with_hints: on failure, add classpath-backed fix hints for missing
+    classes/packages (see tools/compile_diagnostics.py). Costs one extra
+    `mvn dependency:build-classpath` per workspace, so only the pipeline asks."""
     project_dir = Path(project_dir)
     code, output, duration = _run_maven(project_dir, ["-q", "-DskipTests", "compile"], MAVEN_BUILD_TIMEOUT_SECONDS)
-    return CompilationResult(success=code == 0, raw_output_tail=output[-4000:], duration_seconds=duration)
+    output = strip_ansi(output)
+    hints: list[str] = []
+    if code != 0 and with_hints:
+        try:
+            index = build_classpath_index(project_dir, _run_maven)
+            hints = hints_for_compile_failure(output, index, workspace=project_dir)
+        except Exception:  # diagnostics are best-effort; the failure itself is already real
+            logger.warning("Could not compute compile hints", exc_info=True)
+    return CompilationResult(success=code == 0, raw_output_tail=output[-4000:], duration_seconds=duration, hints=hints)
 
 
 def run_tests(project_dir: Path | str, test_class: str | None = None) -> TestRunResult:
@@ -76,7 +90,7 @@ def run_tests(project_dir: Path | str, test_class: str | None = None) -> TestRun
         errors=totals["errors"],
         skipped=totals["skipped"],
         cases=cases,
-        raw_output_tail=output[-4000:],
+        raw_output_tail=strip_ansi(output)[-4000:],
         duration_seconds=duration,
     )
 

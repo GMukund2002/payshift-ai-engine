@@ -44,7 +44,10 @@ Important constraints on the eventual fix:
 A test failing because the Spring ApplicationContext cannot start means the PRODUCTION code or \
 configuration is wrong (e.g. a bean with an unsatisfiable constructor dependency, or an \
 unresolvable @Value placeholder) -- never the test.
-- Only the files listed as editable can be changed.
+- Only the files listed as editable can be changed. Build files (pom.xml, build.gradle) are NOT \
+editable: dependencies are fixed, so a fix must use classes already on the classpath.
+- If DETERMINISTIC FIX HINTS are present, they were computed from the project's real classpath; \
+trust them over your own assumptions (e.g. a class imported from the wrong package).
 
 Respond with a single JSON object:
 {"diagnosis_summary": str, "likely_cause": str, "confidence": "HIGH"|"MEDIUM"|"LOW", \
@@ -63,6 +66,7 @@ Rules:
 - Only return files whose path is in EDITABLE FILES, or a brand-new file under src/main/ (for \
 example a @Configuration class providing a missing bean). Anything else will be rejected.
 - Never modify anything under src/test/ -- existing tests are the specification.
+- Build files (pom.xml, build.gradle) cannot be changed; never "fix" an error by adding a dependency.
 - Every file you return must be COMPLETE file content, not a diff, and must be real working \
 code: no placeholder methods, no "TODO"/"implement this" comments.
 
@@ -199,7 +203,10 @@ def _summarize_failure(state: AgentState) -> str:
         return "STATIC CHECK FAILURES (deterministic, pre-compile):\n" + json.dumps(static.get("findings", []), indent=2)
     compilation = state.get("compilation_result")
     if compilation and not compilation.get("success"):
-        return "COMPILATION FAILURE:\n" + compilation.get("raw_output_tail", "")
+        hints = compilation.get("hints") or []
+        hint_text = ("\n\nDETERMINISTIC FIX HINTS (verified against this project's real classpath -- "
+                     "authoritative):\n" + "\n".join(f"- {h}" for h in hints)) if hints else ""
+        return "COMPILATION FAILURE:\n" + compilation.get("raw_output_tail", "") + hint_text
     test_result = state.get("test_result")
     if test_result and not test_result.get("success"):
         failing = [c for c in test_result.get("cases", []) if c["status"] in ("FAILED", "ERROR")]

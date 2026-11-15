@@ -10,6 +10,7 @@ import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.Parameter;
 import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.payshift.analyzer.model.ArchitectureAssessment;
 import com.payshift.analyzer.model.DetectedProvider;
 import com.payshift.analyzer.model.PaymentClass;
@@ -55,6 +56,17 @@ public class JavaSourceAnalyzer {
                 if (sig != null) {
                     providerMap.computeIfAbsent(sig.id, DetectedProvider::new)
                             .addEvidence("sdk_import: " + imp.getNameAsString() + " (" + pf.relativePath + ")");
+                    fileImportedProviders.computeIfAbsent(pf.relativePath, k -> new java.util.HashSet<>()).add(sig.id);
+                }
+            }
+            // Provider API hosts in string literals: a merchant calling a PSP's REST
+            // API directly (no SDK, so no telling import or Maven dependency) was
+            // otherwise invisible -- detected as "no provider" / greenfield.
+            for (StringLiteralExpr lit : pf.unit.findAll(StringLiteralExpr.class)) {
+                ProviderSignature sig = registry.matchByDomain(lit.getValue());
+                if (sig != null) {
+                    providerMap.computeIfAbsent(sig.id, DetectedProvider::new)
+                            .addEvidence("api_endpoint: " + lit.getValue() + " (" + pf.relativePath + ")");
                     fileImportedProviders.computeIfAbsent(pf.relativePath, k -> new java.util.HashSet<>()).add(sig.id);
                 }
             }
@@ -116,6 +128,10 @@ public class JavaSourceAnalyzer {
                     continue;
                 }
                 String provider = providerForClass;
+                if (provider == null && importedHere.size() == 1) {
+                    // The file's own SDK imports / API hosts point at exactly one provider.
+                    provider = importedHere.iterator().next();
+                }
                 if (provider == null) {
                     provider = resolveProviderFromMethodBody(method);
                 }
