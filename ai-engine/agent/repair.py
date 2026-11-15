@@ -26,7 +26,7 @@ from pathlib import Path
 
 from agent.apply_patch import is_test_source_path
 from agent.state import AgentState
-from llm.client import LLMClient, LLMNotConfiguredError
+from llm.client import LLMClient, LLMUnavailableError
 from tools.documentation_tools import search_provider_docs
 
 logger = logging.getLogger("payshift.agent.repair")
@@ -90,7 +90,7 @@ def diagnose_failures(state: AgentState, llm: LLMClient) -> dict:
     )
     try:
         raw = llm.complete_json(DIAGNOSIS_SYSTEM_PROMPT, user_prompt, step="diagnose_failures")
-    except LLMNotConfiguredError as e:
+    except LLMUnavailableError as e:
         return {"blocked": True, "blocker_reason": str(e)}
     except ValueError as e:
         logger.error("diagnose_failures: invalid JSON from model: %s", e)
@@ -107,8 +107,11 @@ def repair_code(state: AgentState, llm: LLMClient) -> dict:
 
     extra_docs = []
     if diagnosis.get("doc_query"):
-        results = search_provider_docs(diagnosis["doc_query"], provider_id=state["target_provider"], top_k=3)
-        extra_docs = [{"text": r.text, "source_url": r.source_url} for r in results]
+        try:
+            results = search_provider_docs(diagnosis["doc_query"], provider_id=state["target_provider"], top_k=3)
+            extra_docs = [{"text": r.text, "source_url": r.source_url} for r in results]
+        except Exception as e:  # extra docs are optional context for a repair
+            logger.warning("Repair doc lookup failed: %s", e)
 
     user_prompt = (
         f"DIAGNOSIS:\n{json.dumps(diagnosis, indent=2)}\n\n"
@@ -118,7 +121,7 @@ def repair_code(state: AgentState, llm: LLMClient) -> dict:
     )
     try:
         raw = llm.complete_json(REPAIR_SYSTEM_PROMPT, user_prompt, temperature=0.1, step="repair_code")
-    except LLMNotConfiguredError as e:
+    except LLMUnavailableError as e:
         return {"blocked": True, "blocker_reason": str(e)}
     except ValueError as e:
         logger.error("repair_code: invalid JSON from model: %s", e)

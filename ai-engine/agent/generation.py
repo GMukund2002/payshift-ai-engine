@@ -25,7 +25,7 @@ import logging
 from pathlib import Path
 
 from agent.state import AgentState
-from llm.client import LLMClient, LLMNotConfiguredError
+from llm.client import LLMClient, LLMUnavailableError
 from tools.compile_diagnostics import project_class_index
 from tools.java_source_index import relevant_existing_sources, spring_boot_base_packages
 
@@ -233,7 +233,7 @@ def _generate_one_file(
 
     try:
         raw = llm.complete_json(SYSTEM_PROMPT, user_prompt, temperature=0.1, step="generate_code")
-    except LLMNotConfiguredError as e:
+    except LLMUnavailableError as e:
         return {"blocked": True, "blocker_reason": str(e)}
     except ValueError as e:
         logger.error("generate_code: model returned invalid JSON for %s: %s", path, e)

@@ -20,9 +20,16 @@ def research_provider(state: AgentState) -> dict:
     target = state["target_provider"]
     doc_url = state.get("target_provider_doc_url")
 
-    summary = ensure_docs_indexed(target, user_supplied_url=doc_url)
-
     errors = list(state.get("errors", []))
+    try:
+        summary = ensure_docs_indexed(target, user_supplied_url=doc_url)
+    except Exception as e:  # e.g. the embedding provider is down / out of quota
+        logger.error("Documentation indexing failed: %s", e)
+        reason = f"Documentation retrieval unavailable: {type(e).__name__}: {e}"
+        return {"documentation_indexed": {"provider_id": target, "urls_attempted": [], "urls_failed": [],
+                                          "chunks_indexed": 0, "warnings": [], "blocked": True,
+                                          "blocker_reason": reason}, "errors": errors}
+
     for w in summary.warnings:
         errors.append(f"[documentation] {w}")
 
@@ -64,7 +71,11 @@ def retrieve_documentation(state: AgentState) -> dict:
     for capability in capability_model["capabilities"]:
         op = capability["operation"]
         query = _QUERY_TEMPLATES.get(op, op.replace("_", " ").lower())
-        results = search_provider_docs(query=query, provider_id=target, operation=op, top_k=3)
+        try:
+            results = search_provider_docs(query=query, provider_id=target, operation=op, top_k=3)
+        except Exception as e:  # treated as "no documentation" -- which blocks SUPPORTED claims downstream
+            logger.error("Documentation search failed for %s: %s", op, e)
+            results = []
         retrieved[op] = [
             {
                 "text": r.text, "source_url": r.source_url, "title": r.title,

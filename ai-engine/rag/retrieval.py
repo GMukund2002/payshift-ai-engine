@@ -42,8 +42,17 @@ class SearchResult:
 
 
 def _embedding_function_and_collection_name() -> tuple:
+    """PAYSHIFT_EMBEDDINGS=local|openai selects explicitly. Unset keeps the old
+    behavior (OpenAI when OPENAI_API_KEY is set) -- but then an exhausted or
+    revoked key breaks documentation retrieval, so tests and air-gapped
+    deployments pin "local"."""
+    choice = (os.environ.get("PAYSHIFT_EMBEDDINGS") or "").strip().lower()
     api_key = os.environ.get("OPENAI_API_KEY")
-    if api_key:
+    if choice not in ("", "local", "openai"):
+        raise ValueError(f"PAYSHIFT_EMBEDDINGS must be 'local' or 'openai', got {choice!r}")
+    if choice == "openai" and not api_key:
+        raise ValueError("PAYSHIFT_EMBEDDINGS=openai but OPENAI_API_KEY is not set")
+    if api_key and choice != "local":
         logger.info("Using OpenAI embeddings for the documentation index")
         model_name = "text-embedding-3-small"
         return embedding_functions.OpenAIEmbeddingFunction(api_key=api_key, model_name=model_name), \

@@ -58,6 +58,10 @@ def run_case(case: EvalCase, repeat: int) -> dict:
     verification = report.get("verification") or {}
     static = verification.get("static_checks") or {}
     status = "CRASHED" if error else final.get("final_status", "UNKNOWN")
+    if "LLM provider unavailable" in str(report.get("blocker_reason") or error or ""):
+        # Quota/auth/outage: says nothing about generation quality, so it is
+        # counted separately and excluded from the quality rates.
+        status = "INFRA_ERROR"
     return {
         "case": case.name, "repeat": repeat, "run_id": run_id, "status": status, "error": error,
         "blocker_reason": report.get("blocker_reason"),
@@ -75,7 +79,9 @@ def run_case(case: EvalCase, repeat: int) -> dict:
     }
 
 
-def summarize(runs: list[dict]) -> dict:
+def summarize(all_runs: list[dict]) -> dict:
+    infra = [r for r in all_runs if r["status"] == "INFRA_ERROR"]
+    runs = [r for r in all_runs if r["status"] != "INFRA_ERROR"]
     n = len(runs)
 
     def rate(pred) -> float | None:
@@ -86,13 +92,14 @@ def summarize(runs: list[dict]) -> dict:
     completion = sum((r["llm_usage"] or {}).get("completion_tokens", 0) for r in runs)
     return {
         "runs": n,
+        "infra_errors_excluded": len(infra),
         "verified_rate": rate(lambda r: r["status"] == "VERIFIED"),
         "real_integration_rate": rate(lambda r: bool(r["hidden"] and r["hidden"]["integration_is_real"])),
         "false_verified_rate": (round(sum(1 for r in verified if r["false_verified"]) / len(verified), 3)
                                 if verified else None),
         "existing_tests_broken": sum(1 for r in runs if r["hidden"] and r["hidden"]["existing_tests_preserved"] is False),
         "provider_detection_correct": rate(lambda r: set(r["detected_providers"] or []) == set(r["expected_providers"])),
-        "status_counts": {s: sum(1 for r in runs if r["status"] == s) for s in sorted({r["status"] for r in runs})},
+        "status_counts": {s: sum(1 for r in all_runs if r["status"] == s) for s in sorted({r["status"] for r in all_runs})},
         "avg_prompt_tokens": round(prompt / n) if n else None,
         "avg_completion_tokens": round(completion / n) if n else None,
         "avg_duration_seconds": round(sum(r["duration_seconds"] for r in runs) / n, 1) if n else None,

@@ -211,3 +211,19 @@ def test_parse_json_object_tolerates_fences_and_prose(raw):
 def test_parse_json_object_rejects_non_objects(raw):
     with pytest.raises(ValueError):
         parse_json_object(raw)
+
+
+def test_provider_outage_blocks_the_run_with_a_reason_instead_of_crashing():
+    # 4th live eval: OpenAI "insufficient_quota" mid-run raised straight through the graph (CRASHED).
+    from agent.understanding import understand_architecture
+
+    class QuotaExhausted(Exception):
+        pass
+
+    class BrokeLLM(FakeLLMClient):
+        def complete(self, *a, **k):
+            raise QuotaExhausted("Error code: 429 - insufficient_quota")
+
+    out = understand_architecture({"repository_analysis": {}, "repository_path": None}, BrokeLLM())
+    assert out["blocked"] is True
+    assert "LLM provider unavailable" in out["blocker_reason"] and "insufficient_quota" in out["blocker_reason"]

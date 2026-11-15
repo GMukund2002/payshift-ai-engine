@@ -16,7 +16,7 @@ from pathlib import Path
 from agent.apply_patch import is_test_source_path
 from tools.java_source_index import rebase_path_into_scan, spring_boot_base_packages
 from agent.state import AgentState
-from llm.client import LLMClient, LLMNotConfiguredError
+from llm.client import LLMClient, LLMUnavailableError
 from schemas.capabilities import PaymentCapabilityModel
 from schemas.plans import FileChange, IntegrationPlan, ManualReviewItem
 
@@ -100,7 +100,7 @@ def create_plan(state: AgentState, llm: LLMClient) -> dict:
 
     try:
         raw = llm.complete_json(SYSTEM_PROMPT, user_prompt, step="create_plan")
-    except LLMNotConfiguredError as e:
+    except LLMUnavailableError as e:
         return {"blocked": True, "blocker_reason": str(e)}
     except ValueError as e:
         logger.error("create_plan: model returned invalid JSON: %s", e)

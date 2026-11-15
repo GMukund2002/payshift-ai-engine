@@ -14,7 +14,7 @@ import logging
 from pathlib import Path
 
 from agent.state import AgentState
-from llm.client import LLMClient, LLMNotConfiguredError
+from llm.client import LLMClient, LLMUnavailableError
 
 logger = logging.getLogger("payshift.agent.understanding")
 
@@ -51,7 +51,7 @@ def understand_architecture(state: AgentState, llm: LLMClient) -> dict:
 
     try:
         raw = llm.complete_json(SYSTEM_PROMPT, user_prompt, step="understand_architecture")
-    except LLMNotConfiguredError as e:
+    except LLMUnavailableError as e:
         return {"blocked": True, "blocker_reason": str(e)}
     except ValueError as e:
         logger.error("understand_architecture: model returned invalid JSON: %s", e)

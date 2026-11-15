@@ -26,8 +26,20 @@ load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
 logger = logging.getLogger("payshift.llm")
 
 
-class LLMNotConfiguredError(RuntimeError):
+class LLMUnavailableError(RuntimeError):
+    """The LLM could not be used at all for this call. Agent nodes turn this into a
+    BLOCKED run with the reason, rather than letting it crash the pipeline."""
+
+
+class LLMNotConfiguredError(LLMUnavailableError):
     """Raised when an agent node needs a real LLM call but none is configured."""
+
+
+class LLMProviderError(LLMUnavailableError):
+    """The configured provider failed the request after the SDK's own retries:
+    quota/credits exhausted, auth failure, outage. Found in the 4th live eval:
+    "insufficient_quota" mid-run crashed the whole graph instead of reporting
+    why the run stopped."""
 
 
 @dataclass
@@ -77,8 +89,13 @@ class LLMClient(ABC):
             "\n\nRespond with ONLY a single valid JSON object. No prose, no markdown "
             "code fences, no explanation before or after the JSON."
         )
-        response = self.complete(system_prompt, user_prompt + json_instruction,
-                                 temperature=temperature, json_mode=True)
+        try:
+            response = self.complete(system_prompt, user_prompt + json_instruction,
+                                     temperature=temperature, json_mode=True)
+        except LLMUnavailableError:
+            raise
+        except Exception as e:  # provider SDK error (already retried by the SDK where retryable)
+            raise LLMProviderError(f"LLM provider unavailable during '{step}': {type(e).__name__}: {e}") from e
         self._record(step, response.usage)
         if response.truncated:
             raise ValueError(
