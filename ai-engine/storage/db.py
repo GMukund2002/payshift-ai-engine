@@ -53,27 +53,46 @@ def backend_label() -> str:
     return "Postgres (cloud)" if os.environ.get("DATABASE_URL") else "SQLite (local)"
 
 
+# Which backends (keyed by DATABASE_URL, "" for SQLite) have already had their
+# schema ensured in this process -- the DDL only needs to run once, not on
+# every connection (the status endpoint opens one every few seconds per poller).
+_schema_ready: set[str] = set()
+
+
+def _ensure_schema(conn, *, is_postgres: bool) -> None:
+    cur = conn.cursor()
+    cur.execute(_SCHEMA)
+    # Migration for a table created before progress_json existed.
+    #
+    # This used to be a bare `ALTER TABLE ... ADD COLUMN` with the "already
+    # exists" error swallowed. On Postgres that is not harmless: the failed
+    # statement aborts the whole transaction, and the commit that follows
+    # silently becomes a ROLLBACK -- taking the CREATE TABLE above with it.
+    # On a fresh database the table therefore never got created, and because
+    # this layer fails open, every write was then silently dropped.
+    if is_postgres:
+        cur.execute("ALTER TABLE runs ADD COLUMN IF NOT EXISTS progress_json TEXT")
+    else:
+        cur.execute("PRAGMA table_info(runs)")
+        columns = {row[1] for row in cur.fetchall()}
+        if "progress_json" not in columns:
+            cur.execute("ALTER TABLE runs ADD COLUMN progress_json TEXT")
+    conn.commit()
+
+
 def _connect():
-    database_url = os.environ.get("DATABASE_URL")
-    if database_url:
+    database_url = os.environ.get("DATABASE_URL") or ""
+    is_postgres = bool(database_url)
+    if is_postgres:
         import psycopg2  # imported lazily so sqlite-only usage never needs it installed
         conn = psycopg2.connect(database_url)
         placeholder = "%s"
     else:
         conn = sqlite3.connect(LOCAL_DB_PATH)
         placeholder = "?"
-    cur = conn.cursor()
-    cur.execute(_SCHEMA)
-    # Migration for a table created before progress_json existed. Both SQLite
-    # and Postgres support ALTER TABLE ... ADD COLUMN; neither's version here
-    # is guaranteed to support "IF NOT EXISTS" on it, so just swallow the
-    # "already exists" error rather than checking first (TOCTOU-safe, and
-    # this runs rarely -- once per connection, cached nowhere).
-    try:
-        cur.execute("ALTER TABLE runs ADD COLUMN progress_json TEXT")
-    except Exception:
-        pass
-    conn.commit()
+    if database_url not in _schema_ready:
+        _ensure_schema(conn, is_postgres=is_postgres)
+        _schema_ready.add(database_url)
     return conn, placeholder
 
 

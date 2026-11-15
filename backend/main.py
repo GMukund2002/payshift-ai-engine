@@ -18,32 +18,41 @@ persisted after every node (storage/db.py), so a crash-and-restart mid-run
 shows up as a stuck "RUNNING" row instead of nothing, and the client just
 sees a few failed polls before recovering -- degraded, not broken.
 
-Running the actual graph in a background THREAD (asyncio.to_thread), not
-just an asyncio task on the main loop, matters too: graph.stream() calls
+Running the actual graph in a dedicated worker THREAD, not an asyncio task
+on the main loop, matters too: graph.stream() calls
 blocking subprocess.run() (mvn) and blocking HTTP (the LLM client) deep
 inside it, which would otherwise freeze the whole event loop -- including
 every other request, like the /status polling itself -- for the run's full
 duration.
 
-A shared DEMO_ACCESS_KEY env var, if set, gates the one costly endpoint
-(/api/run, which makes real paid LLM calls and runs real compile/test
-subprocesses) so a public deploy can't be used to spend someone else's
-OpenAI budget by strangers hitting the URL. Unset -- the default for local
-dev -- means no gate.
+A shared DEMO_ACCESS_KEY env var, if set, gates every endpoint that costs
+money or writes to disk (/api/upload, /api/analyze, /api/run -- real paid
+LLM calls, real JVM subprocesses, real files) so a public deploy can't be
+used by strangers to spend someone else's OpenAI budget or fill its disk.
+Unset -- the default for local dev -- means no gate.
+
+PAYSHIFT_MAX_CONCURRENT_RUNS (default 1) caps how many pipeline runs execute
+at once in this process: each holds a real Maven JVM, and two at once on a
+small container is exactly the OOM scenario java_tools.py's heap cap exists
+for. A run beyond the cap is rejected with 429 rather than queued silently.
 """
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 import os
+import shutil
 import sys
+import threading
 import uuid
 import zipfile
 from pathlib import Path
+from typing import Literal
 
-from fastapi import FastAPI, Header, HTTPException, UploadFile
+from fastapi import FastAPI, Header, HTTPException, Query, UploadFile
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger("payshift.backend")
 
@@ -60,32 +69,57 @@ from tools.repository_tools import RepositoryAnalysisError, analyze_repository  
 
 SAMPLE_APP = REPO_ROOT / "sample-apps" / "merchant-app"
 UPLOADS_DIR = REPO_ROOT / "workspaces" / "uploads"
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024          # compressed archive as received
 MAX_ZIP_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
+MAX_ZIP_ENTRIES = 20_000
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+MAX_CONCURRENT_RUNS = max(1, int(os.environ.get("PAYSHIFT_MAX_CONCURRENT_RUNS") or 1))
+_run_slots = threading.BoundedSemaphore(MAX_CONCURRENT_RUNS)
 
 app = FastAPI(title="PayShift AI API")
 
 
 def _require_demo_key(x_demo_key: str | None) -> None:
     required = os.environ.get("DEMO_ACCESS_KEY")
-    if required and x_demo_key != required:
+    if required and not hmac.compare_digest((x_demo_key or "").encode(), required.encode()):
         raise HTTPException(status_code=401, detail="Missing or invalid X-Demo-Key header")
 
 
 def _safe_extract_zip(data: bytes) -> Path:
+    """Extracts member by member, counting the bytes actually written rather
+    than trusting each entry's self-declared file_size (which a crafted
+    archive can understate). Skips symlink entries outright."""
     import io
     dest = UPLOADS_DIR / uuid.uuid4().hex[:12]
     dest.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(io.BytesIO(data)) as zf:
-        total_size = 0
-        for info in zf.infolist():
-            name = info.filename
-            if name.startswith("/") or ".." in Path(name).parts:
-                raise ValueError(f"Refusing unsafe zip entry: {name}")
-            total_size += info.file_size
-            if total_size > MAX_ZIP_UNCOMPRESSED_BYTES:
-                raise ValueError("Archive exceeds the 100MB uncompressed size limit")
-        zf.extractall(dest)
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            infos = zf.infolist()
+            if len(infos) > MAX_ZIP_ENTRIES:
+                raise ValueError(f"Archive has more than {MAX_ZIP_ENTRIES} entries")
+            written = 0
+            for info in infos:
+                name = info.filename
+                if name.startswith("/") or "\\" in name or ".." in Path(name).parts:
+                    raise ValueError(f"Refusing unsafe zip entry: {name}")
+                is_symlink = (info.external_attr >> 16) & 0o170000 == 0o120000
+                if is_symlink:
+                    continue
+                target = dest / name
+                if info.is_dir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with zf.open(info) as src, open(target, "wb") as out:
+                    while chunk := src.read(64 * 1024):
+                        written += len(chunk)
+                        if written > MAX_ZIP_UNCOMPRESSED_BYTES:
+                            raise ValueError("Archive exceeds the 100MB uncompressed size limit")
+                        out.write(chunk)
+    except Exception:
+        shutil.rmtree(dest, ignore_errors=True)
+        raise
     children = list(dest.iterdir())
     if len(children) == 1 and children[0].is_dir():
         return children[0]
@@ -121,21 +155,27 @@ def sample_app():
 
 
 @app.post("/api/upload")
-async def upload(file: UploadFile):
-    data = await file.read()
+async def upload(file: UploadFile, x_demo_key: str | None = Header(default=None)):
+    _require_demo_key(x_demo_key)
+    # Read at most one byte past the limit instead of the whole body, so an
+    # oversized upload is rejected without first being buffered into memory.
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail=f"Upload exceeds {MAX_UPLOAD_BYTES // (1024 * 1024)}MB")
     try:
-        extracted = _safe_extract_zip(data)
+        extracted = await asyncio.to_thread(_safe_extract_zip, data)
     except (ValueError, zipfile.BadZipFile) as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return {"repo_path": str(extracted)}
 
 
 class AnalyzeRequest(BaseModel):
-    repo_path: str
+    repo_path: str = Field(max_length=1024)
 
 
 @app.post("/api/analyze")
-def analyze(req: AnalyzeRequest):
+def analyze(req: AnalyzeRequest, x_demo_key: str | None = Header(default=None)):
+    _require_demo_key(x_demo_key)
     resolved = _resolve_repo_path(req.repo_path)
     try:
         analysis = analyze_repository(resolved)
@@ -145,15 +185,25 @@ def analyze(req: AnalyzeRequest):
 
 
 class RunRequest(BaseModel):
-    repo_path: str
-    operation_mode: str
-    target_provider: str
-    target_provider_doc_url: str | None = None
+    repo_path: str = Field(max_length=1024)
+    operation_mode: Literal["ADD_PSP", "MIGRATE_PSP"]
+    # Provider ids are opaque labels but end up in file paths, prompts and the
+    # dashboard's run history, so keep them to a boring, safe alphabet.
+    target_provider: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,39}$")
+    target_provider_doc_url: str | None = Field(default=None, max_length=2048)
 
 
 def _execute_pipeline_sync(run_id: str, repository_path: str, req: "RunRequest") -> None:
     """Runs entirely in a worker thread (see module docstring) -- blocking
-    subprocess/HTTP calls here must never run on the main event loop."""
+    subprocess/HTTP calls here must never run on the main event loop.
+    Releases the concurrency slot acquired by run_pipeline, whatever happens."""
+    try:
+        _execute_pipeline_inner(run_id, repository_path, req)
+    finally:
+        _run_slots.release()
+
+
+def _execute_pipeline_inner(run_id: str, repository_path: str, req: "RunRequest") -> None:
     initial_state = {
         "repository_path": repository_path,
         "operation_mode": req.operation_mode,
@@ -161,7 +211,6 @@ def _execute_pipeline_sync(run_id: str, repository_path: str, req: "RunRequest")
         "target_provider_doc_url": req.target_provider_doc_url,
         "run_id": run_id,
     }
-    start_run(run_id=run_id, operation_mode=req.operation_mode, target_provider=req.target_provider)
 
     accumulated = dict(initial_state)
     nodes_completed: list[dict] = []
@@ -204,16 +253,36 @@ def _execute_pipeline_sync(run_id: str, repository_path: str, req: "RunRequest")
 async def run_pipeline(req: RunRequest, x_demo_key: str | None = Header(default=None)):
     _require_demo_key(x_demo_key)
     resolved = _resolve_repo_path(req.repo_path)
-    run_id = uuid.uuid4().hex[:12]
-    # Fire-and-forget: start the real work in a background thread and return
-    # immediately. The client polls /api/runs/{run_id}/status for progress --
-    # see the module docstring for why this replaced a long-lived SSE stream.
-    asyncio.create_task(asyncio.to_thread(_execute_pipeline_sync, run_id, str(resolved), req))
+    if not _run_slots.acquire(blocking=False):
+        raise HTTPException(
+            status_code=429,
+            detail=f"{MAX_CONCURRENT_RUNS} run(s) already in progress on this server; try again when it finishes.",
+        )
+    try:
+        run_id = uuid.uuid4().hex[:12]
+        # Record the run BEFORE returning its id, so the client's very first
+        # status poll finds a RUNNING row instead of a 404.
+        await asyncio.to_thread(
+            start_run, run_id=run_id, operation_mode=req.operation_mode, target_provider=req.target_provider,
+        )
+        # Fire-and-forget: start the real work in its own worker thread and return
+        # immediately. The client polls /api/runs/{run_id}/status for progress --
+        # see the module docstring for why this replaced a long-lived SSE stream.
+        # A plain thread rather than asyncio.create_task(to_thread(...)): the run
+        # (and the release of its concurrency slot) must not depend on an asyncio
+        # task that the event loop could drop or cancel before it ever starts.
+        threading.Thread(
+            target=_execute_pipeline_sync, args=(run_id, str(resolved), req),
+            name=f"payshift-run-{run_id}", daemon=True,
+        ).start()
+    except BaseException:
+        _run_slots.release()
+        raise
     return {"run_id": run_id}
 
 
 @app.get("/api/runs")
-def runs(limit: int = 20):
+def runs(limit: int = Query(default=20, ge=1, le=200)):
     return list_runs(limit=limit)
 
 
