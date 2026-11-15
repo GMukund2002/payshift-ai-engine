@@ -14,6 +14,7 @@ import logging
 from pathlib import Path
 
 from agent.apply_patch import is_test_source_path
+from tools.java_source_index import rebase_path_into_scan, spring_boot_base_packages
 from agent.state import AgentState
 from llm.client import LLMClient, LLMNotConfiguredError
 from schemas.capabilities import PaymentCapabilityModel
@@ -158,6 +159,7 @@ def _normalize_file_changes(
     - Drop duplicate paths (first occurrence wins).
     """
     repo = Path(repository_path) if repository_path else None
+    base_packages = spring_boot_base_packages(repo) if repo and repo.is_dir() else []
 
     def exists(path: str) -> bool:
         return bool(repo) and (repo / path).is_file()
@@ -175,6 +177,18 @@ def _normalize_file_changes(
                 logger.warning("Dropping planned change to protected existing test file: %s", path)
                 continue
             seen.add(path)
+            if change_type == "CREATE" and not exists(path):
+                # New classes outside the component-scanned package never become beans
+                # (they silently don't exist at runtime), and tests outside it can't find
+                # the @SpringBootConfiguration. Move them under the app's base package.
+                rebased = rebase_path_into_scan(path, base_packages)
+                if rebased != path:
+                    logger.warning("Planned file outside the component-scanned package %s; moved %s -> %s",
+                                   base_packages, path, rebased)
+                    if rebased in seen:
+                        continue
+                    seen.add(rebased)
+                    path = rebased
             if change_type == "CREATE" and exists(path):
                 logger.warning("Planned CREATE targets an existing file; treating it as MODIFY: %s", path)
                 modifies.append(FileChange(path=path, reason=f.get("reason", ""), change_type="MODIFY"))

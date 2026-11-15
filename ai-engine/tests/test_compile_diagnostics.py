@@ -94,3 +94,44 @@ def test_hint_points_at_the_projects_own_type_not_a_new_one(tmp_path):
     assert hints == ["PaymentProvider already exists in this project as com.payments.router.provider.PaymentProvider "
                      "(not in package com.payments.router.spi). Import and use that existing type; do NOT create a new "
                      "class or interface named PaymentProvider."]
+
+
+def _project(tmp_path, files: dict[str, str]):
+    for rel, content in files.items():
+        f = tmp_path / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(content)
+    return tmp_path
+
+
+def test_hint_lists_real_members_when_generated_code_calls_a_nonexistent_method(tmp_path):
+    # Live eval run eval-merchant-app-1: refundRequest.getPaymentId() on a record with only amount().
+    ws = _project(tmp_path, {"src/main/java/com/payshift/merchant/dto/RefundRequest.java":
+                             "package com.payshift.merchant.dto;\nimport java.math.BigDecimal;\n"
+                             "public record RefundRequest(BigDecimal amount) {\n}\n"})
+    output = ("[ERROR] /w/RazorpayApiPaymentGateway.java:[33,50] cannot find symbol\n"
+              "  symbol:   method getPaymentId()\n"
+              "  location: variable refundRequest of type com.payshift.merchant.dto.RefundRequest\n")
+    [hint] = hints_for_compile_failure(output, {}, workspace=ws)
+    assert "RefundRequest has no method getPaymentId()" in hint
+    assert "amount()  [record component: BigDecimal amount]" in hint
+
+
+def test_hint_lists_every_interface_method_when_an_implementation_is_incomplete(tmp_path):
+    # Live eval runs eval-multi-psp-router-1/2: RazorpayProvider implemented only part of PaymentProvider.
+    ws = _project(tmp_path, {"src/main/java/com/payments/router/provider/PaymentProvider.java": """package com.payments.router.provider;
+import java.util.Set;
+public interface PaymentProvider {
+    record ProviderPayment(String providerPaymentId, String status) {}
+    String id();
+    Set<String> supportedCurrencies();
+    ProviderPayment createPayment(String reference, long amountMinor, String currency);
+}
+"""})
+    output = ("[ERROR] /w/RazorpayProvider.java:[13,8] com.payments.router.provider.RazorpayProvider is not abstract "
+              "and does not override abstract method supportedCurrencies() in com.payments.router.provider.PaymentProvider\n")
+    [hint] = hints_for_compile_failure(output, {}, workspace=ws)
+    assert "RazorpayProvider implements PaymentProvider but not all of its methods" in hint
+    for sig in ("String id()", "Set<String> supportedCurrencies()",
+                "ProviderPayment createPayment(String reference, long amountMinor, String currency)"):
+        assert sig in hint, hint

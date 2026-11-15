@@ -257,6 +257,7 @@ public class WiringChecker {
                 checkStubMethods(cm, report);
                 checkUnusedConfigValues(cm, report);
                 checkDuplicateTypeName(cm, changed, report);
+                checkComponentScan(cm, report);
                 if (cm.isInterface()) checkInterfaceImplemented(cm, report);
             }
         }
@@ -764,6 +765,47 @@ public class WiringChecker {
                         + "Make it implement the interface the existing router/service already injects, or add a new "
                         + "@Service/@RestController file that uses it (new files are allowed; unplanned existing "
                         + "files are not editable)."));
+    }
+
+    /**
+     * Packages Spring Boot component-scans: each @SpringBootApplication class's
+     * package, plus literal basePackages of any @ComponentScan.
+     */
+    private Set<String> componentScanRoots() {
+        Set<String> roots = new LinkedHashSet<>();
+        for (ClassModel cm : classes) {
+            for (AnnotationExpr a : cm.decl.getAnnotations()) {
+                String name = simple(a.getNameAsString());
+                if (name.equals("SpringBootApplication")) roots.add(cm.pkg);
+                if (name.equals("ComponentScan") || name.equals("SpringBootApplication")) {
+                    for (StringLiteralExpr lit : a.findAll(StringLiteralExpr.class)) {
+                        if (lit.getValue().matches("[a-z_][\\w.]*")) roots.add(lit.getValue());
+                    }
+                }
+            }
+        }
+        return roots;
+    }
+
+    /**
+     * A stereotype-annotated class outside every component-scanned package is
+     * never registered: the "integration" does not exist at runtime. Live eval
+     * run eval-stripe-direct-checkout-2 put every new class in com.acme.payment
+     * while the app scans com.acme.checkout -- it compiled, tests passed, and no
+     * Razorpay bean existed.
+     */
+    private void checkComponentScan(ClassModel cm, Report report) {
+        if (!cm.isBeanClass() || cm.decl.isNestedType()) return;
+        Set<String> roots = componentScanRoots();
+        if (roots.isEmpty()) return; // not a Spring Boot app we can reason about
+        boolean scanned = roots.stream().anyMatch(r -> cm.pkg.equals(r) || cm.pkg.startsWith(r + "."));
+        if (!scanned) {
+            report.findings.add(new Finding("outside_component_scan", "ERROR", cm.file, cm.decl,
+                    cm.simpleName + " is in package " + cm.pkg + ", outside the component-scanned package(s) "
+                            + roots + ", so Spring never registers it and it does not exist at runtime. Move it "
+                            + "under " + roots.iterator().next() + " (e.g. " + roots.iterator().next() + "."
+                            + cm.pkg.substring(cm.pkg.lastIndexOf('.') + 1) + ")."));
+        }
     }
 
     /**

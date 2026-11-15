@@ -89,6 +89,16 @@ def apply_patch(state: AgentState) -> dict:
             rejected.append({"path": file["path"], "reason": "escapes workspace"})
             continue
 
+        if file.get("delete"):
+            # Only something this run created may be removed (e.g. a class being moved into
+            # the component-scanned package); original repository files never.
+            if (original_dir / rel_path).exists() or str(rel_path) not in touched:
+                rejected.append({"path": str(rel_path), "reason": "only files created in this run can be deleted"})
+                continue
+            target.unlink(missing_ok=True)
+            cumulative.pop(str(rel_path), None)
+            continue
+
         # Protected tests: an EXISTING test file is never overwritten, whatever
         # step asked for it (a planner CREATE on an existing path, a repair that
         # "fixes" a failure by editing the test). New test files are fine.
@@ -98,7 +108,7 @@ def apply_patch(state: AgentState) -> dict:
             continue
 
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(file["content"], encoding="utf-8")
+        target.write_text(file.get("content", ""), encoding="utf-8")
         cumulative[str(rel_path)] = file["content"]
         if str(rel_path) not in touched:
             touched.append(str(rel_path))

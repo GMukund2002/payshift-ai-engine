@@ -70,7 +70,12 @@ example a @Configuration class providing a missing bean). Anything else will be 
 - Every file you return must be COMPLETE file content, not a diff, and must be real working \
 code: no placeholder methods, no "TODO"/"implement this" comments.
 
-Respond with a single JSON object: {"patch_description": str, "files": [{"path": str, "content": str}]}"""
+- To MOVE a file created earlier in this run (e.g. into the component-scanned package), return it at \
+the new path with its content AND {"path": "<old path>", "delete": true}. Only files created in this run \
+can be deleted.
+
+Respond with a single JSON object: {"patch_description": str, "files": [{"path": str, "content": str} | \
+{"path": str, "delete": true}]}"""
 
 
 def diagnose_failures(state: AgentState, llm: LLMClient) -> dict:
@@ -166,7 +171,15 @@ def _editable_paths(state: AgentState) -> set[str]:
 def _scope_repair_files(state: AgentState, files: list, editable: set[str]) -> tuple[list[dict], list[dict]]:
     repo = Path(state["repository_path"])
     accepted, rejected = [], []
+    touched = set(state.get("touched_paths", []))
     for f in files:
+        if isinstance(f, dict) and isinstance(f.get("path"), str) and f.get("delete") is True:
+            path = f["path"].removeprefix("./")
+            if path in touched and not (repo / path).is_file():
+                accepted.append({"path": path, "delete": True})
+            else:
+                rejected.append({"path": path, "reason": "only files created in this run can be deleted"})
+            continue
         if not isinstance(f, dict) or not isinstance(f.get("path"), str) or not isinstance(f.get("content"), str):
             rejected.append({"path": str(f.get("path") if isinstance(f, dict) else f), "reason": "malformed file entry"})
             continue

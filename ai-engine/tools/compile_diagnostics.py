@@ -21,6 +21,8 @@ import re
 import zipfile
 from pathlib import Path
 
+from tools.java_source_index import member_signatures, type_sources
+
 logger = logging.getLogger("payshift.tools.compile_diagnostics")
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
@@ -33,6 +35,19 @@ _MISSING_CLASS = re.compile(
     re.MULTILINE,
 )
 _MISSING_PACKAGE = re.compile(r"package\s+(?P<pkg>[a-z_][\w.]*)\s+does not exist")
+#   cannot find symbol
+#     symbol:   method getPaymentId()
+#     location: variable refundRequest of type com.x.RefundRequest   (or: class com.x.Y)
+_MISSING_METHOD = re.compile(
+    r"cannot find symbol\s*\n.*?symbol:\s+method\s+(?P<method>\w+)\((?P<args>[^)]*)\)\s*\n.*?location:\s+"
+    r"(?:variable \w+ of type |class |interface )(?P<type>[\w.]+)",
+    re.MULTILINE,
+)
+#   X is not abstract and does not override abstract method m(A) in com.x.Iface
+_NOT_ABSTRACT = re.compile(
+    r"(?P<cls>[\w.]+) is not abstract and does not override abstract method (?P<method>\w+)\([^)]*\) "
+    r"in (?P<iface>[\w.]+)"
+)
 _IMPORT_LINE = re.compile(r"^\s*import\s+(?:static\s+)?(?P<fqn>[\w.]+)\s*;", re.MULTILINE)
 _PACKAGE_LINE = re.compile(r"^\s*package\s+(?P<pkg>[\w.]+)\s*;", re.MULTILINE)
 
@@ -135,6 +150,30 @@ def hints_for_compile_failure(output: str, index: dict[str, list[str]], workspac
         seen.add(cls)
         hints.append(_hint_for_class(cls, location, index, project_fqns))
 
+    sources = type_sources(workspace) if workspace is not None else {}
+    for m in _MISSING_METHOD.finditer(text):
+        type_simple = m.group("type").split(".")[-1]
+        key = f"method:{type_simple}.{m.group('method')}"
+        if key in seen or type_simple not in sources:
+            continue
+        seen.add(key)
+        sigs = member_signatures(sources[type_simple][1])
+        hints.append(f"{type_simple} has no method {m.group('method')}({m.group('args')}). Its real members are: "
+                     + ("; ".join(sigs) if sigs else "(none found)")
+                     + f". Use one of these (or change only code generated in this run); {type_simple} itself is an "
+                       f"existing file and is not editable.")
+
+    for m in _NOT_ABSTRACT.finditer(text):
+        iface_simple = m.group("iface").split(".")[-1]
+        key = f"abstract:{m.group('cls')}:{iface_simple}"
+        if key in seen or iface_simple not in sources:
+            continue
+        seen.add(key)
+        sigs = member_signatures(sources[iface_simple][1])
+        hints.append(f"{m.group('cls').split('.')[-1]} implements {iface_simple} but not all of its methods. "
+                     f"{iface_simple} declares exactly: " + "; ".join(sigs)
+                     + ". Implement every one of these with exactly these signatures.")
+
     for m in _MISSING_PACKAGE.finditer(text):
         pkg = m.group("pkg")
         if pkg in seen:
@@ -186,3 +225,44 @@ def _imports_from(workspace: Path | None, package: str) -> list[str]:
         except OSError:
             continue
     return found
+
+
+def fix_misimports(workspace: Path, files: list[str], run_maven) -> list[dict]:
+    """Rewrites an import whose class does not exist where it says, when exactly
+    one class with that simple name exists in the project or on its classpath --
+    the same thing an IDE's "organize imports" does. Found in 3 of 8 runs of the
+    second live eval (RestTemplateBuilder imported from the wrong package), each
+    costing a full compile + LLM repair round to fix one line.
+
+    Never touches java.* / javax.* imports (the JDK is not indexed), nested-class
+    imports, static or wildcard imports, or anything with 0 or >1 candidates.
+    Returns [{file, from, to}] for the report."""
+    workspace = Path(workspace)
+    jar_index = build_classpath_index(workspace, run_maven)
+    if not jar_index:
+        return []
+    project = project_class_index(workspace)
+    known = {fqn for v in jar_index.values() for fqn in v} | {fqn for v in project.values() for fqn in v}
+    fixes = []
+    for rel in files:
+        f = workspace / rel
+        if not f.is_file() or not rel.endswith(".java"):
+            continue
+        text = f.read_text(encoding="utf-8", errors="replace")
+        new_text = text
+        for m in _IMPORT_LINE.finditer(text):
+            line = m.group(0)
+            fqn = m.group("fqn")
+            if " static " in f" {line.strip()} " or fqn.startswith(("java.", "javax.")) or fqn in known:
+                continue
+            if fqn.rsplit(".", 1)[0] in known:  # nested class import (Outer.Inner) of a real class
+                continue
+            simple = fqn.rsplit(".", 1)[-1]
+            candidates = project.get(simple) or jar_index.get(simple) or []
+            if len(candidates) != 1:
+                continue
+            new_text = new_text.replace(line, line.replace(fqn, candidates[0]), 1)
+            fixes.append({"file": rel, "from": fqn, "to": candidates[0]})
+        if new_text != text:
+            f.write_text(new_text, encoding="utf-8")
+    return fixes

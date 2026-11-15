@@ -28,8 +28,12 @@ from __future__ import annotations
 
 import logging
 
+from pathlib import Path
+
 from agent.apply_patch import is_test_source_path
 from agent.state import AgentState
+from tools.compile_diagnostics import fix_misimports
+from tools.java_tools import _run_maven
 from tools.repository_tools import RepositoryAnalysisError, check_wiring
 
 logger = logging.getLogger("payshift.agent.static_checks")
@@ -42,16 +46,26 @@ def static_checks(state: AgentState) -> dict:
     if not workspace or not changed:
         return {"static_check_result": {"passed": True, "findings": []}}
 
+    # Deterministic import correction first (cheap, IDE-style; recorded in the report).
+    try:
+        import_fixes = fix_misimports(Path(workspace), changed, _run_maven)
+    except Exception:  # best effort: the compile step still reports any import it couldn't fix
+        logger.warning("Import correction failed; continuing", exc_info=True)
+        import_fixes = []
+    fixed = [{"check": "auto_fixed_import", "severity": "INFO", "file": f["file"], "line": None,
+              "message": f"Rewrote import {f['from']} -> {f['to']} (the only class of that name in the project "
+                         f"or on its classpath)."} for f in import_fixes]
+
     try:
         raw = check_wiring(workspace, changed)
     except RepositoryAnalysisError as e:
         logger.warning("Static checks could not run; continuing to compile/test: %s", e)
-        return {"static_check_result": {"passed": True, "findings": [{
+        return {"static_check_result": {"passed": True, "findings": fixed + [{
             "check": "checker_unavailable", "severity": "WARNING", "file": "", "line": None,
             "message": f"Deterministic wiring checks could not run: {e}",
         }]}}
 
-    findings = [
+    findings = fixed + [
         {"check": f.get("check", ""), "severity": f.get("severity", "ERROR"), "file": f.get("file", ""),
          "line": f.get("line"), "message": f.get("message", "")}
         for f in raw.get("findings", [])

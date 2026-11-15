@@ -294,6 +294,32 @@ class WiringCheckerTest {
     }
 
     @Test
+    void beansOutsideTheComponentScannedPackageAreFlagged() throws IOException {
+        // Live eval run eval-stripe-direct-checkout-2: every new class went into com.acme.payment
+        // while the app is @SpringBootApplication in com.acme.checkout -- none of them existed at runtime.
+        write("src/main/java/com/acme/checkout/CheckoutApplication.java", """
+                package com.acme.checkout;
+                @SpringBootApplication
+                public class CheckoutApplication {}
+                """);
+        String outside = "src/main/java/com/acme/payment/RazorpayController.java";
+        String inside = "src/main/java/com/acme/checkout/payment/RazorpayController2.java";
+        write(outside, """
+                package com.acme.payment;
+                @RestController
+                public class RazorpayController { @PostMapping("/x") public String x() { return "o" + "k"; } }
+                """);
+        write(inside, """
+                package com.acme.checkout.payment;
+                @RestController
+                public class RazorpayController2 { @PostMapping("/y") public String y() { return "o" + "k"; } }
+                """);
+        WiringChecker.Report r = check(outside, inside);
+        assertThat(errors(r, "outside_component_scan")).singleElement().asString()
+                .contains("com.acme.payment").contains("com.acme.checkout");
+    }
+
+    @Test
     void beansInjectedOnlyAsListElementsAreReachable() throws IOException {
         baseApp();
         write(PKG + "provider/PaymentProvider.java", """

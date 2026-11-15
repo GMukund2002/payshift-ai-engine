@@ -27,6 +27,7 @@ from pathlib import Path
 from agent.state import AgentState
 from llm.client import LLMClient, LLMNotConfiguredError
 from tools.compile_diagnostics import project_class_index
+from tools.java_source_index import relevant_existing_sources, spring_boot_base_packages
 
 logger = logging.getLogger("payshift.agent.generation")
 
@@ -116,6 +117,7 @@ def generate_code(state: AgentState, llm: LLMClient) -> dict:
     relevant_docs = {op: retrieved[op] for op in actionable_ops if op in retrieved}
     app_config = _read_application_config(repository_path)
     project_types = sorted(fqn for fqns in project_class_index(repository_path).values() for fqn in fqns)[:400]
+    base_packages = spring_boot_base_packages(repository_path)
 
     # One LLM call per planned file, new files before modifications to existing ones,
     # so a call generating (say) a controller edit can see the actual content of the
@@ -136,6 +138,8 @@ def generate_code(state: AgentState, llm: LLMClient) -> dict:
             already_generated=generated,
             app_config=app_config,
             project_types=project_types,
+            base_packages=base_packages,
+            repository_path=repository_path,
         )
         if outcome.get("blocked"):
             # Partial progress is reported alongside the block so a caller can see
@@ -169,7 +173,8 @@ def _read_application_config(repository_path: Path) -> dict[str, str]:
 def _generate_one_file(
     *, llm: LLMClient, plan: dict, target: dict, modify_context: dict[str, str],
     relevant_docs: dict, already_generated: dict[str, str], app_config: dict[str, str] | None = None,
-    project_types: list[str] | None = None,
+    project_types: list[str] | None = None, base_packages: list[str] | None = None,
+    repository_path: Path | None = None,
 ) -> dict:
     path = target["path"]
 
@@ -178,6 +183,22 @@ def _generate_one_file(
         + json.dumps(plan, indent=2),
         "\n\nTARGET FILE TO GENERATE NOW:\n" + json.dumps(target, indent=2),
     ]
+    if base_packages:
+        user_prompt_parts.append(
+            "\n\nAPPLICATION BASE PACKAGE(S) (component-scanned): " + ", ".join(base_packages)
+            + " -- every new class MUST be in one of these packages or a subpackage, or Spring never registers it."
+        )
+    if repository_path is not None:
+        mention_text = json.dumps(plan) + json.dumps(target) + "".join(already_generated.values())
+        always = [plan["abstraction_interface"].split(".")[-1].split(" ")[0]] if plan.get("abstraction_interface") else []
+        existing = relevant_existing_sources(repository_path, mention_text, always=always)
+        existing.pop(path, None)  # a file being modified is already shown in full above
+        if existing:
+            user_prompt_parts.append(
+                "\n\nEXISTING SOURCE OF TYPES THIS CHANGE USES (ground truth: call only constructors/methods/"
+                "accessors that literally exist here; implement EVERY abstract method of an interface you "
+                "implement; do not modify these files unless they are the target):\n" + json.dumps(existing, indent=2)
+            )
     if project_types:
         user_prompt_parts.append(
             "\n\nEXISTING PROJECT TYPES (fully qualified -- import existing types from exactly these packages; "
