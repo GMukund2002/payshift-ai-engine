@@ -1,75 +1,63 @@
 # Evaluation
 
-Run with `make benchmark` (or `python -m evaluation.benchmark` from
-`ai-engine/`). Writes `ai-engine/evaluation/results.json`.
+Two layers: a **live evaluation** that runs the whole pipeline with a real LLM
+against a corpus of apps and judges the result with hidden checks, and a
+deterministic **benchmark** of the non-LLM parts.
 
-## Real measured results
+## Live evaluation (`make docker-eval`, `ai-engine/evaluation/live_eval.py`)
 
-These numbers are from the benchmark script run before a real LLM key
-existed, so the "payshift" rows reflect the deterministic parts of the
-pipeline (detection, operation recall, RAG retrieval) plus the one
-hand-validated compile/test result, not a live agent run. A key was
-supplied partway through the build and used to run the full live pipeline
-6 times instead (see `README.md` §4) — that's the more informative
-baseline-vs-PayShift signal right now, not this table's "baseline" column,
-which the benchmark script still doesn't execute automatically.
+### Corpus (`ai-engine/evaluation/corpus.py`, apps under `sample-apps/`)
 
-| condition | variant                  | detect P | detect R | op recall | docs relevant | compile | tests  |
-|-----------|---------------------------|----------|----------|-----------|----------------|---------|--------|
-| payshift  | merchant-app              | 1.0      | 1.0      | 1.0       | true           | true    | 1.0    |
-| baseline  | merchant-app              | —        | —        | —         | —              | —       | —      |
-| payshift  | tightly-coupled-fixture   | 1.0      | 1.0      | 1.0       | true           | n/a¹    | n/a¹   |
-| baseline  | tightly-coupled-fixture   | —        | —        | —         | —              | —       | —      |
-| payshift  | abstracted-fixture        | 1.0      | 1.0      | 1.0       | true           | n/a¹    | n/a¹   |
-| baseline  | abstracted-fixture        | —        | —        | —         | —              | —       | —      |
+| Case | Existing integration | Target |
+|---|---|---|
+| `merchant-app` | Stripe SDK behind a provider-named port, webhooks, idempotency | razorpay |
+| `stripe-direct-checkout` | `StripeClient` called directly in the service; no abstraction | razorpay |
+| `razorpay-rest-orders` | Razorpay over raw REST (`RestClient`, endpoint only in `application.yml`), HMAC webhooks; no SDK | stripe |
+| `multi-psp-router` | `PaymentProvider` port, Stripe (SDK) + PayPal (REST) adapters, router over `List<PaymentProvider>` | razorpay |
 
-¹ These two are minimal JavaParser fixtures (detection-only), not full
-Maven projects — compile/test metrics don't apply to them.
+Each app builds and passes its own tests unmodified, and the wiring checker
+reports nothing on its untouched sources.
 
-**`—` means genuinely not measured, not zero and not estimated.** The
-baseline condition ("direct LLM code generation with no repository
-analysis, RAG, or verification") has never actually been run — the
-benchmark script doesn't implement it yet, it just leaves the row blank
-with an explanatory note. A key now exists (see README §4), so this is a
-real gap to close, not a credentials gap: implement an actual baseline
-call in `evaluation/benchmark.py` and re-run, rather than filling these
-cells in by hand.
+### Hidden checks (`ai-engine/evaluation/hidden_checks.py`)
 
-## What `payshift/merchant-app`'s numbers actually mean
+Applied to each finished workspace; the pipeline never sees them:
+1. A JUnit test is injected and run: it boots the real `ApplicationContext` and
+   requires a bean whose class names the target provider **and** that some other
+   bean depends on (or is itself a controller).
+2. Changed production code must reference the provider (API host or SDK package).
+3. Every original test must still run and pass.
 
-- **Detection precision/recall = 1.0**: the analyzer found exactly
-  `{stripe}` with no false positives and no misses, against the known
-  ground truth for that repo.
-- **Operation recall = 1.0**: all 6 expected operation types
-  (`CREATE_PAYMENT`, `GET_PAYMENT_STATUS`, `CREATE_REFUND`,
-  `HANDLE_WEBHOOK`, `VERIFY_WEBHOOK_SIGNATURE`, `FULFILL_ORDER`) were found.
-- **Documentation retrieval relevant = true**: a live query against
-  Stripe's real indexed docs for "how to issue a refund" returned a top
-  passage that actually mentions "refund."
-- **Compilation success / test pass rate = 1.0**: this is the *real*
-  ADD_PSP(razorpay) result from `tests/test_graph_end_to_end.py`'s
-  generated files, re-applied and re-verified fresh — 11/11 tests pass
-  (9 pre-existing Stripe tests + 2 new Razorpay tests), 0 files modified.
+`false_verified` = the pipeline said VERIFIED but check 1 or 2 failed. That is
+the number a buyer cares about most; the target is 0.
 
-## Self-repair
+### Results (gpt-4o)
 
-Not exercised by the benchmark script itself, but exercised for real 5 out
-of 6 times in the live pipeline runs (README §4) — every one of those hit
-the 2-attempt bound and correctly reported `UNRESOLVED_FAILURE` rather
-than a false success. The mechanism in isolation is also verified in
-`tests/test_repair.py`: a deliberately broken file fails a real `mvn
-compile`, `diagnose_failures` and `repair_code` run against that real
-failure output, and the repaired file recompiles for real.
+| Round | Runs | VERIFIED | Real integration | False VERIFIED | What the round exposed (each fixed + regression-tested before the next) |
+|---|---|---|---|---|---|
+| 1 | 4 | 2 | 1 | 1 | Types matched by simple name: a repair invented a second `PaymentProvider` in a made-up package, and the router's real one never saw the adapter. Plans with no caller for the adapter. |
+| 2 | 8 | 2 | 1 | 1 | New classes outside the component-scanned package (never registered as beans). Generated code calling methods that don't exist on existing types (never shown their source). Repeated mis-import of `RestTemplateBuilder`. |
+| 3 | 8 | 4 | 3 | 1 | A repair removed `@Component`, leaving an implementation nothing created. Plans without an entry point. Repair budgets exhausted while still converging. |
+| 4 | 5\* | 5 | 5 | 0 | LLM quota exhaustion crashed the graph instead of blocking (fixed); scripted tests were silently spending real embedding quota (fixed). |
 
-## Honest limitations of this evaluation
+\* 3 runs of round 4 never executed (OpenAI credits ran out); they are excluded.
 
-- Only one repository (the sample app) has a real, compilable ADD_PSP
-  demonstration; the other two "variants" are detection-only fixtures. A
-  fuller evaluation would need more real sample repositories.
-- No token-usage or dollar-cost numbers are reported even though real LLM
-  calls were made (README §4): `LLMUsage` (see `llm/client.py`) is
-  returned per call but never aggregated into `AgentState` or the report
-  — a real gap to close, not a measurement that was skipped for lack of
-  a key.
-- MIGRATE_PSP has no generated-code verification, only planning-level
-  guarantees (see `docs/architecture.md` / `README.md` limitations).
+Never observed in any run: an existing test broken by a VERIFIED change, a
+provider mis-detected, or a run exceeding its repair budget.
+
+Caveats: 25 runs, 4 apps, one model. `multi-psp-router` has not been measured
+since the last two rounds of fixes. Rates are directional until more runs and
+more apps exist. Raw per-run JSON: `ai-engine/evaluation/live_results/`.
+
+## Deterministic benchmark (`make benchmark`, `ai-engine/evaluation/benchmark.py`)
+
+Detection precision/recall and operation recall against known ground truth,
+plus a doc-retrieval relevance probe and a compile/test check of the
+hand-validated ADD_PSP(razorpay) files. No LLM involved; the "baseline"
+condition (direct LLM generation without analysis/RAG/verification) is still
+not implemented and is reported as unmeasured, not estimated.
+
+| variant | detect P | detect R | op recall | docs relevant | compile | tests |
+|---|---|---|---|---|---|---|
+| merchant-app | 1.0 | 1.0 | 1.0 | true | true | 1.0 |
+| tightly-coupled-fixture | 1.0 | 1.0 | 1.0 | true | n/a | n/a |
+| abstracted-fixture | 1.0 | 1.0 | 1.0 | true | n/a | n/a |
