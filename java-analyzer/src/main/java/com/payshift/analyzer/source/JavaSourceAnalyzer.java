@@ -102,6 +102,14 @@ public class JavaSourceAnalyzer {
 
             String providerForClass = resolveSingleProviderForClass(ci);
 
+            // Entity/repository methods (Payment.getStatus(), Payment.applyRefund(),
+            // Order.markFulfilled()) are domain-model state changes, not payment
+            // operations the app performs against a provider; counting them made the
+            // capability model cite an entity setter as the source of CREATE_REFUND.
+            if ("DOMAIN".equals(role) || "REPOSITORY".equals(role)) {
+                continue;
+            }
+
             for (MethodDeclaration method : ci.methods) {
                 String opType = classifyOperation(method.getNameAsString(), role, paymentRelated);
                 if (opType == null) {
@@ -133,9 +141,14 @@ public class JavaSourceAnalyzer {
     private List<ParsedFile> parseAllJavaFiles(Path repositoryRoot) {
         List<ParsedFile> parsed = new ArrayList<>();
         try (Stream<Path> paths = Files.walk(repositoryRoot)) {
+            // Test sources are excluded: they describe how the app is verified, not
+            // what it does. Including them made a JUnit method named
+            // "validWebhook_marksPaymentSucceeded..." the representative
+            // HANDLE_WEBHOOK operation the whole capability model was built from.
             List<Path> javaFiles = paths
                     .filter(p -> p.toString().endsWith(".java"))
                     .filter(p -> !com.payshift.analyzer.pom.PomAnalyzer.isUnderBuildOutputDir(repositoryRoot, p))
+                    .filter(p -> !isTestSource(repositoryRoot, p))
                     .toList();
             for (Path file : javaFiles) {
                 try {
@@ -149,6 +162,11 @@ public class JavaSourceAnalyzer {
             errors.add("Failed to walk repository: " + e.getMessage());
         }
         return parsed;
+    }
+
+    static boolean isTestSource(Path repositoryRoot, Path file) {
+        String rel = repositoryRoot.relativize(file).toString().replace('\\', '/');
+        return rel.startsWith("src/test/") || rel.contains("/src/test/");
     }
 
     private ClassInfo buildClassInfo(ClassOrInterfaceDeclaration decl, String relativePath) {

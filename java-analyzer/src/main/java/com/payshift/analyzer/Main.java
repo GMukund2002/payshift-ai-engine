@@ -2,6 +2,7 @@ package com.payshift.analyzer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.payshift.analyzer.check.WiringChecker;
 import com.payshift.analyzer.model.AnalysisReport;
 import com.payshift.analyzer.model.MavenDependency;
 import com.payshift.analyzer.pom.PomAnalyzer;
@@ -13,13 +14,20 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * CLI / subprocess entry point for the PayShift repository analyzer.
  *
  * Usage:
  *   java -jar java-analyzer.jar <repository-path> [--output report.json]
+ *   java -jar java-analyzer.jar <repository-path> --check-wiring [--changed a.java,b.java] [--output out.json]
+ *
+ * The first form is repository analysis (providers, payment classes/operations,
+ * architecture). The second runs the deterministic Spring wiring / stub checks
+ * (see {@link WiringChecker}) and reports findings for the listed changed files.
  *
  * Always prints exactly one JSON document to stdout (or to --output if given) and
  * nothing else, so a parent process (the Python AI engine) can capture it reliably.
@@ -30,7 +38,8 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("Usage: java -jar java-analyzer.jar <repository-path> [--output report.json]");
+            System.err.println("Usage: java -jar java-analyzer.jar <repository-path> [--output report.json] "
+                    + "[--check-wiring [--changed a.java,b.java]]");
             System.exit(1);
         }
 
@@ -41,10 +50,24 @@ public class Main {
         }
 
         String outputFile = null;
+        boolean checkWiring = false;
+        Set<String> changed = new LinkedHashSet<>();
         for (int i = 1; i < args.length; i++) {
             if ("--output".equals(args[i]) && i + 1 < args.length) {
                 outputFile = args[i + 1];
+            } else if ("--check-wiring".equals(args[i])) {
+                checkWiring = true;
+            } else if ("--changed".equals(args[i]) && i + 1 < args.length) {
+                for (String f : args[i + 1].split(",")) {
+                    if (!f.isBlank()) changed.add(f.trim());
+                }
             }
+        }
+
+        if (checkWiring) {
+            WiringChecker.Report wiring = new WiringChecker().check(repoPath, changed);
+            emit(new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT).writeValueAsString(wiring), outputFile);
+            return;
         }
 
         AnalysisReport report = new AnalysisReport();
@@ -65,7 +88,7 @@ public class Main {
         // Maven-dependency evidence is folded in after source scanning so a provider
         // can be detected purely from its POM entry even with zero source usage yet.
         for (MavenDependency dep : dependencies) {
-            var sig = registry.matchByGroupId(dep.groupId);
+            var sig = registry.matchByMavenDependency(dep.groupId, dep.artifactId);
             if (sig != null) {
                 var existing = report.detectedProviders.stream()
                         .filter(p -> p.name.equals(sig.id)).findFirst();
@@ -81,8 +104,10 @@ public class Main {
         }
 
         ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
-        String json = mapper.writeValueAsString(report);
+        emit(mapper.writeValueAsString(report), outputFile);
+    }
 
+    private static void emit(String json, String outputFile) throws java.io.IOException {
         if (outputFile != null) {
             Files.writeString(Path.of(outputFile), json, StandardCharsets.UTF_8);
         } else {

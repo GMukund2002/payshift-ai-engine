@@ -29,6 +29,7 @@ public class ProviderRegistry {
                 sig.id = (String) m.get("id");
                 sig.displayName = (String) m.get("displayName");
                 sig.mavenGroupIds = (List<String>) m.getOrDefault("mavenGroupIds", List.of());
+                sig.mavenCoordinates = (List<String>) m.getOrDefault("mavenCoordinates", List.of());
                 sig.importPrefixes = (List<String>) m.getOrDefault("importPrefixes", List.of());
                 sig.classNameHints = (List<String>) m.getOrDefault("classNameHints", List.of());
                 sig.apiDomains = (List<String>) m.getOrDefault("apiDomains", List.of());
@@ -45,15 +46,39 @@ public class ProviderRegistry {
     }
 
     public ProviderSignature matchByGroupId(String groupId) {
-        if (groupId == null) return null;
-        return signatures.stream().filter(s -> s.mavenGroupIds.stream().anyMatch(groupId::equals)).findFirst().orElse(null);
+        return matchByMavenDependency(groupId, null);
     }
 
+    /**
+     * A dependency matches a provider by exact "groupId:artifactId" coordinate, or
+     * by groupId alone only for providers whose whole groupId is theirs. Shared
+     * groupIds (e.g. "com.squareup" also publishes javapoet, okio, ...) must be
+     * listed as full coordinates instead, or every app using those libraries
+     * would be "detected" as a Square merchant.
+     */
+    public ProviderSignature matchByMavenDependency(String groupId, String artifactId) {
+        if (groupId == null) return null;
+        String coordinate = artifactId == null ? null : groupId + ":" + artifactId;
+        return signatures.stream()
+                .filter(s -> s.mavenGroupIds.contains(groupId)
+                        || (coordinate != null && s.mavenCoordinates.contains(coordinate)))
+                .findFirst().orElse(null);
+    }
+
+    /** Longest matching import prefix wins, so overlapping registry entries can't shadow each other by order. */
     public ProviderSignature matchByImport(String importName) {
         if (importName == null) return null;
-        return signatures.stream()
-                .filter(s -> s.importPrefixes.stream().anyMatch(importName::startsWith))
-                .findFirst().orElse(null);
+        ProviderSignature best = null;
+        int bestLength = -1;
+        for (ProviderSignature s : signatures) {
+            for (String prefix : s.importPrefixes) {
+                if (importName.startsWith(prefix) && prefix.length() > bestLength) {
+                    best = s;
+                    bestLength = prefix.length();
+                }
+            }
+        }
+        return best;
     }
 
     public ProviderSignature matchByClassNameHint(String simpleClassOrTypeName) {

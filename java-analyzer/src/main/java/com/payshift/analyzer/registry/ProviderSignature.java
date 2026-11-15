@@ -13,7 +13,10 @@ import java.util.List;
 public class ProviderSignature {
     public String id;
     public String displayName;
+    /** groupIds owned entirely by this provider (any artifact under them is the provider's). */
     public List<String> mavenGroupIds = List.of();
+    /** Exact "groupId:artifactId" coordinates, for providers that share a groupId with unrelated libraries. */
+    public List<String> mavenCoordinates = List.of();
     public List<String> importPrefixes = List.of();
     public List<String> classNameHints = List.of();
     public List<String> apiDomains = List.of();
