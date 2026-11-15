@@ -1,0 +1,19 @@
+# Secrets must never be baked into an image layer: pass them at runtime
+# (docker run --env-file .env, or the host platform's secret store).
+.env
+.env.*
+!.env.example
+
+# Local state / build output -- regenerated inside the container.
+.git
+.venv
+venv
+workspaces
+**/target
+**/__pycache__
+**/*.pyc
+ai-engine/chroma_db
+ai-engine/storage/local_runs.db
+ai-engine/.pytest_cache
+.idea
+.DS_Store
