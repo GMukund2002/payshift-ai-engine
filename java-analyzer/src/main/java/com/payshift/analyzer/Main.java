@@ -103,8 +103,44 @@ public class Main {
             }
         }
 
+        // Provider API hosts configured in Spring config (e.g. a base-url property for a
+        // REST client) -- the usual place a no-SDK integration puts the endpoint.
+        for (String[] hit : configEndpointHits(repoPath, registry)) {
+            String providerId = hit[0];
+            var dp = report.detectedProviders.stream().filter(p -> p.name.equals(providerId)).findFirst()
+                    .orElseGet(() -> {
+                        var created = new com.payshift.analyzer.model.DetectedProvider(providerId);
+                        report.detectedProviders.add(created);
+                        return created;
+                    });
+            dp.addEvidence("config_endpoint: " + hit[1]);
+            dp.recomputeConfidence();
+        }
+
         ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
         emit(mapper.writeValueAsString(report), outputFile);
+    }
+
+    /** [providerId, "file: line"] for every main-config line mentioning a registered provider API host. */
+    static List<String[]> configEndpointHits(Path repoPath, ProviderRegistry registry) {
+        List<String[]> hits = new ArrayList<>();
+        try (var paths = Files.walk(repoPath)) {
+            List<Path> configs = paths.filter(Files::isRegularFile)
+                    .filter(p -> !PomAnalyzer.isUnderBuildOutputDir(repoPath, p))
+                    .filter(p -> repoPath.relativize(p).toString().replace('\\', '/').contains("src/main/resources/"))
+                    .filter(p -> p.getFileName().toString().matches("application.*\\.(ya?ml|properties)"))
+                    .toList();
+            for (Path cfg : configs) {
+                String rel = repoPath.relativize(cfg).toString().replace('\\', '/');
+                for (String line : Files.readAllLines(cfg, StandardCharsets.UTF_8)) {
+                    var sig = registry.matchByDomain(line);
+                    if (sig != null) hits.add(new String[]{sig.id, rel + ": " + line.trim()});
+                }
+            }
+        } catch (java.io.IOException | java.io.UncheckedIOException e) {
+            // best effort: config evidence is supplementary to source/POM evidence
+        }
+        return hits;
     }
 
     private static void emit(String json, String outputFile) throws java.io.IOException {
