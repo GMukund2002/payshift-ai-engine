@@ -70,6 +70,11 @@ import java.util.stream.Stream;
  *       "implement this" comment.</li>
  *   <li>{@code unimplemented_interface}: a newly introduced interface with no
  *       implementing class anywhere in the project.</li>
+ *   <li>{@code unused_config_value}: a credential/config value injected via
+ *       {@code @Value} and then never used -- e.g. an API key read into a field
+ *       while every provider call goes out unauthenticated.</li>
+ *   <li>{@code unreachable_integration}: a new service/component nothing
+ *       injects, so the integration exists but can never be invoked.</li>
  * </ul>
  *
  * Purely syntactic (no symbol resolution, no classpath): types are matched by
@@ -141,7 +146,19 @@ public class WiringChecker {
             "BigInteger", "Duration", "int", "long", "boolean", "double", "float", "short", "byte", "char");
 
     private static final Pattern STUB_MARKER = Pattern.compile(
-            "(?i)\\b(todo|fixme|implement(ed|ation)?\\b.*\\b(logic|here|this|me|later|call)|placeholder|stub|not\\s+(yet\\s+)?implemented)");
+            "(?i)\\b(todo|fixme|implement(ed|ation)?\\b.*\\b(logic|here|this|me|later|call)|placeholder|stub"
+                    + "|not\\s+(yet\\s+)?implemented|logic\\s+(to|for)\\b|(your|actual|real)\\s+(code|logic|implementation))");
+    private static final Pattern CREDENTIAL_NAME = Pattern.compile("(?i)(key|secret|token|password|passwd|credential|auth)");
+
+    /** Classes that are themselves entry points (invoked by the framework, not injected). */
+    private static final Set<String> ENTRY_POINT_SUPERTYPES = Set.of(
+            "CommandLineRunner", "ApplicationRunner", "Filter", "OncePerRequestFilter", "GenericFilterBean",
+            "HandlerInterceptor", "WebMvcConfigurer", "ApplicationListener", "HealthIndicator", "Converter",
+            "ErrorController", "AuthenticationProvider", "UserDetailsService", "Job", "Tasklet");
+    private static final Set<String> ENTRY_POINT_METHOD_ANNOTATIONS = Set.of(
+            "Scheduled", "EventListener", "TransactionalEventListener", "KafkaListener", "RabbitListener",
+            "JmsListener", "SqsListener", "StreamListener", "Bean", "PostConstruct", "GetMapping", "PostMapping",
+            "RequestMapping", "PutMapping", "DeleteMapping", "PatchMapping", "MessageMapping");
     private static final Pattern LOGGER_NAME = Pattern.compile("(?i)^(log|logger|LOG|LOGGER|slf4jLogger)$");
 
     private final List<ClassModel> classes = new ArrayList<>();
@@ -216,8 +233,13 @@ public class WiringChecker {
             if (isChanged) {
                 checkValuePlaceholders(cm, config, report);
                 checkStubMethods(cm, report);
+                checkUnusedConfigValues(cm, report);
                 if (cm.isInterface()) checkInterfaceImplemented(cm, report);
             }
+        }
+        Set<String> injectedTypes = allInjectedTypeNames();
+        for (ClassModel cm : classes) {
+            if (changed.contains(cm.file)) checkReachable(cm, injectedTypes, report);
         }
         // @Bean factory-method parameters are injection points too.
         for (BeanMethod bm : beanMethods) {
@@ -477,6 +499,10 @@ public class WiringChecker {
                                 + (hasDeadLocal ? " and computes a value it never uses" : "")
                                 + (marker ? ", with an 'implement this' style comment" : "")
                                 + ". Implement the real provider call (or remove the method)."));
+            } else if (allTrivial && !stmts.isEmpty() && isOverride(m)
+                    && stmts.stream().allMatch(st -> st instanceof EmptyStmt || isLoggingStatement(st))) {
+                report.findings.add(new Finding("stub_method", "ERROR", cm.file, m,
+                        sig + " implements its interface contract only by logging; it performs no real work."));
             } else if (allTrivial && marker) {
                 report.findings.add(new Finding("stub_method", "ERROR", cm.file, m,
                         sig + " has an empty body marked as to-be-implemented."));
@@ -571,6 +597,118 @@ public class WiringChecker {
                     "Interface " + iface.simpleName + " was introduced but no class in the project implements it, "
                             + "so anything depending on it has no bean and the new provider is never actually wired in."));
         }
+    }
+
+    // ------------------------------------------------------------------ unused config / reachability
+
+    private void checkUnusedConfigValues(ClassModel cm, Report report) {
+        // @Value fields.
+        for (FieldDeclaration fd : cm.decl.getFields()) {
+            if (!hasAnnotation(fd.getAnnotations(), "Value")) continue;
+            for (VariableDeclarator v : fd.getVariables()) {
+                if (!fieldUsedOutsideConstructorAssignments(cm, v.getNameAsString())) {
+                    reportUnused(cm, fd, v.getNameAsString(), report);
+                }
+            }
+        }
+        // @Value constructor parameters: used directly in the constructor, or
+        // stored in a field that is then used elsewhere.
+        for (ConstructorDeclaration ctor : cm.decl.getConstructors()) {
+            for (Parameter p : ctor.getParameters()) {
+                if (!hasAnnotation(p.getAnnotations(), "Value")) continue;
+                String name = p.getNameAsString();
+                List<String> sinkFields = new ArrayList<>();
+                long directUses = 0;
+                for (NameExpr n : ctor.getBody().findAll(NameExpr.class)) {
+                    if (!n.getNameAsString().equals(name)) continue;
+                    Optional<String> sink = assignedField(n);
+                    if (sink.isPresent()) sinkFields.add(sink.get()); else directUses++;
+                }
+                boolean used = directUses > 0
+                        || sinkFields.stream().anyMatch(f -> fieldUsedOutsideConstructorAssignments(cm, f));
+                if (!used) reportUnused(cm, p, name, report);
+            }
+        }
+    }
+
+    private void reportUnused(ClassModel cm, Node node, String name, Report report) {
+        boolean credential = CREDENTIAL_NAME.matcher(name).find();
+        report.findings.add(new Finding("unused_config_value", credential ? "ERROR" : "WARNING", cm.file, node,
+                cm.simpleName + " injects '" + name + "' via @Value but never uses it"
+                        + (credential ? " -- so calls to the provider are made without the credential (they would "
+                        + "be rejected as unauthenticated). Apply it (e.g. basic auth / Authorization header)." : ".")));
+    }
+
+    /** `this.f = name` or `f = name` inside a constructor: returns f. */
+    private static Optional<String> assignedField(NameExpr n) {
+        return n.getParentNode()
+                .filter(parent -> parent instanceof com.github.javaparser.ast.expr.AssignExpr)
+                .map(parent -> (com.github.javaparser.ast.expr.AssignExpr) parent)
+                .filter(a -> a.getValue() == n)
+                .map(a -> a.getTarget() instanceof com.github.javaparser.ast.expr.FieldAccessExpr fa
+                        ? fa.getNameAsString() : a.getTarget().toString());
+    }
+
+    private static boolean fieldUsedOutsideConstructorAssignments(ClassModel cm, String field) {
+        for (MethodDeclaration m : cm.decl.getMethods()) {
+            if (m.findAll(NameExpr.class).stream().anyMatch(n -> n.getNameAsString().equals(field))) return true;
+            if (m.findAll(com.github.javaparser.ast.expr.FieldAccessExpr.class).stream()
+                    .anyMatch(fa -> fa.getNameAsString().equals(field))) return true;
+        }
+        for (ConstructorDeclaration c : cm.decl.getConstructors()) {
+            for (NameExpr n : c.getBody().findAll(NameExpr.class)) {
+                if (n.getNameAsString().equals(field) && assignedField(n).isEmpty()) return true;
+            }
+        }
+        for (FieldDeclaration fd : cm.decl.getFields()) { // used in another field's initializer
+            for (VariableDeclarator v : fd.getVariables()) {
+                if (v.getInitializer().map(i -> i.findAll(NameExpr.class).stream()
+                        .anyMatch(n -> n.getNameAsString().equals(field))).orElse(false)) return true;
+            }
+        }
+        return false;
+    }
+
+    private Set<String> allInjectedTypeNames() {
+        Set<String> types = new HashSet<>();
+        for (ClassModel cm : classes) {
+            if (!cm.isBeanClass()) continue;
+            for (InjectionPoint ip : injectionPoints(cm)) addTypeAndArgs(ip.type(), types);
+        }
+        for (BeanMethod bm : beanMethods) {
+            for (Parameter p : bm.decl().getParameters()) addTypeAndArgs(p.getType(), types);
+        }
+        return types;
+    }
+
+    private static void addTypeAndArgs(Type type, Set<String> into) {
+        into.add(typeName(type));
+        if (type.isClassOrInterfaceType()) {
+            type.asClassOrInterfaceType().getTypeArguments().ifPresent(args -> args.forEach(a -> addTypeAndArgs(a, into)));
+        }
+    }
+
+    private void checkReachable(ClassModel cm, Set<String> injectedTypes, Report report) {
+        if (!cm.isBeanClass() || !cm.hasAnnotation("Component", "Service", "Repository")) return;
+        Set<String> names = new HashSet<>(supertypesOf(cm));
+        names.add(cm.simpleName);
+        if (names.stream().anyMatch(injectedTypes::contains)) return;
+        if (names.stream().anyMatch(ENTRY_POINT_SUPERTYPES::contains)) return;
+        boolean hasEntryMethod = cm.decl.getMethods().stream().anyMatch(m -> m.getAnnotations().stream()
+                .anyMatch(a -> ENTRY_POINT_METHOD_ANNOTATIONS.contains(simple(a.getNameAsString()))));
+        if (hasEntryMethod) return;
+        report.findings.add(new Finding("unreachable_integration", "ERROR", cm.file, cm.decl,
+                cm.simpleName + " is a Spring bean that nothing injects (no service, controller, router or @Bean "
+                        + "method depends on it or on its interfaces), so the new integration can never be invoked. "
+                        + "Wire it into the service/controller/router that should use it."));
+    }
+
+    private static boolean isOverride(MethodDeclaration m) {
+        return m.getAnnotations().stream().anyMatch(a -> simple(a.getNameAsString()).equals("Override"));
+    }
+
+    private static boolean isLoggingStatement(Statement s) {
+        return s instanceof ExpressionStmt es && es.getExpression() instanceof MethodCallExpr call && isLoggingCall(call);
     }
 
     // ------------------------------------------------------------------ helpers

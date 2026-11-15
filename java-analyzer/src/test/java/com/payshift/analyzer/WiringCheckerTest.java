@@ -150,9 +150,21 @@ class WiringCheckerTest {
                         this.restTemplate = builder.build(); this.keyId = keyId; this.secret = secret;
                     }
                     public String createOrder(long amount) {
-                        Map body = restTemplate.postForObject("https://api.razorpay.com/v1/orders", Map.of("amount", amount), Map.class);
+                        HttpHeaders headers = new HttpHeaders();
+                        headers.setBasicAuth(keyId, secret);
+                        Map body = restTemplate.postForObject("https://api.razorpay.com/v1/orders",
+                                new HttpEntity<>(Map.of("amount", amount), headers), Map.class);
                         return (String) body.get("id");
                     }
+                }
+                """);
+        write(PKG + "service/RazorpayCheckout.java", """
+                package com.acme.service;
+                @Service
+                public class RazorpayCheckout {
+                    private final RazorpayPaymentGateway gateway;
+                    public RazorpayCheckout(RazorpayPaymentGateway gateway) { this.gateway = gateway; }
+                    @PostMapping("/razorpay/orders") public String create(long amount) { return gateway.createOrder(amount); }
                 }
                 """);
 
@@ -160,6 +172,99 @@ class WiringCheckerTest {
 
         assertThat(r.findings).isEmpty();
         assertThat(r.passed).isTrue();
+    }
+
+    @Test
+    void flagsTheHollowIntegrationThatLiveRunF0d9ReportedAsVerified() throws IOException {
+        baseApp();
+        String config = PKG + "config/RazorpayClientConfig.java";
+        String iface = PKG + "provider/RazorpayPaymentGateway.java";
+        String gateway = PKG + "provider/RazorpayApiPaymentGateway.java";
+        // The three files gpt-4o generated in run f0d9df91493b, which compiled, booted and
+        // passed every existing test -- while sending every Razorpay call unauthenticated,
+        // stubbing the webhook handler, and never being reachable from anywhere.
+        write(config, """
+                package com.acme.config;
+                @Configuration
+                public class RazorpayClientConfig {
+                    @Value("${payshift.razorpay.api-key:placeholder}")
+                    private String apiKey;
+                    @Bean
+                    public RestTemplate razorpayRestTemplate(RestTemplateBuilder builder) { return builder.build(); }
+                }
+                """);
+        write(iface, """
+                package com.acme.provider;
+                public interface RazorpayPaymentGateway {
+                    void createRefund(String paymentId);
+                    void handleWebhook(String payload);
+                    String getPaymentStatus(String paymentId);
+                }
+                """);
+        write(gateway, """
+                package com.acme.provider;
+                @Component
+                public class RazorpayApiPaymentGateway implements RazorpayPaymentGateway {
+                    private static final Logger logger = LoggerFactory.getLogger(RazorpayApiPaymentGateway.class);
+                    private final RestTemplate restTemplate;
+                    @Value("${payshift.razorpay.api-key:placeholder}")
+                    private String apiKey;
+                    public RazorpayApiPaymentGateway(RestTemplate restTemplate) { this.restTemplate = restTemplate; }
+                    @Override
+                    public void createRefund(String paymentId) {
+                        String url = String.format("https://api.razorpay.com/v1/payments/%s/refund", paymentId);
+                        try {
+                            restTemplate.postForEntity(url, null, Void.class);
+                            logger.info("Refund created for payment ID: {}", paymentId);
+                        } catch (Exception e) {
+                            throw new RuntimeException("Failed to create refund", e);
+                        }
+                    }
+                    @Override
+                    public void handleWebhook(String payload) {
+                        // Logic to handle webhook payload
+                        logger.info("Received webhook payload: {}", payload);
+                    }
+                    @Override
+                    public String getPaymentStatus(String paymentId) {
+                        return restTemplate.getForObject("https://api.razorpay.com/v1/payments/" + paymentId, String.class);
+                    }
+                }
+                """);
+
+        WiringChecker.Report r = check(config, iface, gateway);
+
+        assertThat(r.passed).isFalse();
+        assertThat(errors(r, "unused_config_value")).hasSize(2).allMatch(m -> m.contains("apiKey"));
+        assertThat(errors(r, "stub_method")).singleElement().asString().contains("handleWebhook");
+        assertThat(errors(r, "unreachable_integration")).singleElement().asString().contains("RazorpayApiPaymentGateway");
+        assertThat(errors(r, "missing_bean")).isEmpty();   // the RestTemplate @Bean is real
+    }
+
+    @Test
+    void beansInjectedOnlyAsListElementsAreReachable() throws IOException {
+        baseApp();
+        write(PKG + "provider/PaymentProvider.java", """
+                package com.acme.provider;
+                public interface PaymentProvider { String id(); }
+                """);
+        write(PKG + "provider/Router.java", """
+                package com.acme.provider;
+                @Component
+                public class Router {
+                    private final List<PaymentProvider> providers;
+                    public Router(List<PaymentProvider> providers) { this.providers = providers; }
+                    @GetMapping("/providers") public int count() { return providers.size(); }
+                }
+                """);
+        String added = PKG + "provider/RazorpayProvider.java";
+        write(added, """
+                package com.acme.provider;
+                @Component
+                public class RazorpayProvider implements PaymentProvider { public String id() { return "razor" + "pay"; } }
+                """);
+        assertThat(errors(check(added), "unreachable_integration")).isEmpty();
+        assertThat(errors(check(added), "ambiguous_bean")).isEmpty();
     }
 
     // ------------------------------------------------------------ beans
@@ -184,7 +289,7 @@ class WiringCheckerTest {
                     public String ping() { return rt.getForObject("https://x", String.class); }
                 }
                 """);
-        assertThat(check(client).findings).isEmpty();
+        assertThat(errors(check(client), "missing_bean")).isEmpty();
     }
 
     @Test
@@ -257,10 +362,11 @@ class WiringCheckerTest {
         String cls = PKG + "provider/Keyed.java";
         write(cls, """
                 package com.acme.provider;
-                @Component
+                @Configuration
                 public class Keyed {
-                    public Keyed(@Value("${razorpay.key}") String key) {}
-                    public String id() { return "x" + 1; }
+                    private final String key;
+                    public Keyed(@Value("${razorpay.key}") String key) { this.key = key; }
+                    @Bean public String razorpayKeyHolder() { return key.trim(); }
                 }
                 """);
         WiringChecker.Report r = check(cls);
