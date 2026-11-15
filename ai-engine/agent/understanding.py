@@ -49,7 +49,7 @@ def understand_architecture(state: AgentState, llm: LLMClient) -> dict:
     )
 
     try:
-        raw = llm.complete_json(SYSTEM_PROMPT, user_prompt)
+        raw = llm.complete_json(SYSTEM_PROMPT, user_prompt, step="understand_architecture")
     except LLMNotConfiguredError as e:
         return {"blocked": True, "blocker_reason": str(e)}
     except ValueError as e:

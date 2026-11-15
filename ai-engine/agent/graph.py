@@ -47,6 +47,20 @@ def _route_after_tests(state: AgentState) -> str:
     return "generate_report"
 
 
+def _route_after_repair(state: AgentState) -> str:
+    if state.get("blocked"):
+        return "generate_report"
+    if state.get("pending_patch"):
+        return "apply_patch"
+    # The repair's every file was out of scope and rejected, so the workspace is
+    # unchanged: recompiling would just reproduce the same failure (minutes of
+    # Maven). Spend the next attempt on a fresh diagnosis -- which is shown why
+    # the last patch was rejected -- or stop if the budget is gone.
+    if state.get("repair_count", 0) < MAX_REPAIR_ATTEMPTS:
+        return "diagnose_failures"
+    return "generate_report"
+
+
 def build_graph(llm: LLMClient):
     graph = StateGraph(AgentState)
 
@@ -63,7 +77,7 @@ def build_graph(llm: LLMClient):
     graph.add_node("run_tests", verification.run_tests)
     graph.add_node("diagnose_failures", partial(repair.diagnose_failures, llm=llm))
     graph.add_node("repair_code", partial(repair.repair_code, llm=llm))
-    graph.add_node("generate_report", reporting.generate_report)
+    graph.add_node("generate_report", partial(reporting.generate_report, llm=llm))
 
     graph.add_edge(START, "inspect_repository")
     graph.add_conditional_edges("inspect_repository", _route_blocked,
@@ -86,8 +100,9 @@ def build_graph(llm: LLMClient):
                                  {"generate_report": "generate_report", "diagnose_failures": "diagnose_failures"})
     graph.add_conditional_edges("diagnose_failures", _route_blocked,
                                  {"blocked": "generate_report", "continue": "repair_code"})
-    graph.add_conditional_edges("repair_code", _route_blocked,
-                                 {"blocked": "generate_report", "continue": "apply_patch"})
+    graph.add_conditional_edges("repair_code", _route_after_repair,
+                                 {"generate_report": "generate_report", "apply_patch": "apply_patch",
+                                  "diagnose_failures": "diagnose_failures"})
     graph.add_edge("generate_report", END)
 
     return graph.compile()

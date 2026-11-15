@@ -38,10 +38,17 @@ class AgentState(TypedDict, total=False):
     # create_plan
     integration_plan: dict[str, Any]
 
-    # generate_code / apply_patch
-    generated_files: list[dict[str, str]]  # [{path, content}]
+    # generate_code / repair_code / apply_patch
+    generated_files: list[dict[str, str]]  # cumulative [{path, content}] for the whole run
+    pending_patch: list[dict[str, str]] | None  # files to write on the next apply_patch pass
+    touched_paths: list[str]  # every path apply_patch has written this run
+    applied_changes: dict[str, list[str]]  # {"created": [...], "modified": [...]} vs original
+    rejected_patch_files: list[dict[str, str]]  # [{path, reason}] refused by the last apply_patch
     workspace_path: str
-    changes_diff: str
+    changes_diff: str  # cumulative diff, original -> modified
+
+    # static_checks (deterministic pre-compile verification)
+    static_check_result: dict[str, Any]
 
     # compile_project / run_tests
     compilation_result: dict[str, Any]

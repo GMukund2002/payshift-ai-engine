@@ -129,7 +129,8 @@ def generate_code(state: AgentState, llm: LLMClient) -> dict:
             }
         generated[path] = outcome["content"]
 
-    return {"generated_files": [{"path": p, "content": c} for p, c in generated.items()]}
+    files = [{"path": p, "content": c} for p, c in generated.items()]
+    return {"generated_files": files, "pending_patch": files}
 
 
 def _generate_one_file(
@@ -165,7 +166,7 @@ def _generate_one_file(
     user_prompt = "".join(user_prompt_parts)
 
     try:
-        raw = llm.complete_json(SYSTEM_PROMPT, user_prompt, temperature=0.1)
+        raw = llm.complete_json(SYSTEM_PROMPT, user_prompt, temperature=0.1, step="generate_code")
     except LLMNotConfiguredError as e:
         return {"blocked": True, "blocker_reason": str(e)}
     except ValueError as e:

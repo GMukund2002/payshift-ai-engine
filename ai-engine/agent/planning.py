@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 
+from agent.apply_patch import is_test_source_path
 from agent.state import AgentState
 from llm.client import LLMClient, LLMNotConfiguredError
 from schemas.capabilities import PaymentCapabilityModel
@@ -84,7 +86,7 @@ def create_plan(state: AgentState, llm: LLMClient) -> dict:
     )
 
     try:
-        raw = llm.complete_json(SYSTEM_PROMPT, user_prompt)
+        raw = llm.complete_json(SYSTEM_PROMPT, user_prompt, step="create_plan")
     except LLMNotConfiguredError as e:
         return {"blocked": True, "blocker_reason": str(e)}
     except ValueError as e:
@@ -99,7 +101,9 @@ def create_plan(state: AgentState, llm: LLMClient) -> dict:
         for p in passages
     })
 
-    files_to_modify = _strip_protected_test_modifications(raw.get("files_to_modify", []))
+    files_to_create, files_to_modify = _normalize_file_changes(
+        raw.get("files_to_create", []), raw.get("files_to_modify", []), state.get("repository_path"),
+    )
 
     try:
         plan = IntegrationPlan(
@@ -110,7 +114,7 @@ def create_plan(state: AgentState, llm: LLMClient) -> dict:
             reuse_existing_abstraction=bool(raw.get("reuse_existing_abstraction", False)),
             abstraction_interface=raw.get("abstraction_interface"),
             required_changes=raw.get("required_changes", []),
-            files_to_create=[FileChange(**f) for f in raw.get("files_to_create", [])],
+            files_to_create=files_to_create,
             files_to_modify=files_to_modify,
             documentation_references=documentation_references,
             security_requirements=raw.get("security_requirements", []),
@@ -127,18 +131,46 @@ def create_plan(state: AgentState, llm: LLMClient) -> dict:
     return {"integration_plan": plan.model_dump(), "capability_model": capability_model}
 
 
-def _strip_protected_test_modifications(files_to_modify: list[dict]) -> list[FileChange]:
-    """Never let the planner schedule a MODIFY on anything under a test source
-    root -- protected tests must not be rewritten to make a bad implementation
-    pass. A new test the plan wants is still fine as a files_to_create entry."""
-    kept = []
-    for f in files_to_modify:
-        path = f.get("path", "")
-        if "src/test/" in path or path.startswith("src/test/"):
-            logger.warning("Dropping planned modification to protected test file: %s", path)
-            continue
-        kept.append(FileChange(**f))
-    return kept
+def _normalize_file_changes(
+    files_to_create: list[dict], files_to_modify: list[dict], repository_path: str | None,
+) -> tuple[list[FileChange], list[FileChange]]:
+    """Makes the plan's file list match reality on disk:
+
+    - Never schedule a change to an EXISTING test file -- protected tests must
+      not be rewritten to make a bad implementation pass. (A CREATE on a test
+      path that already exists is that same rewrite under another label.)
+      Genuinely new test files are fine.
+    - A CREATE whose path already exists is really a MODIFY: reclassify it so
+      generation is shown the file's current content and asked for a minimal
+      edit, instead of blindly replacing a file it has never seen.
+    - Drop duplicate paths (first occurrence wins).
+    """
+    repo = Path(repository_path) if repository_path else None
+
+    def exists(path: str) -> bool:
+        return bool(repo) and (repo / path).is_file()
+
+    creates: list[FileChange] = []
+    modifies: list[FileChange] = []
+    seen: set[str] = set()
+    for change_type, entries in (("CREATE", files_to_create), ("MODIFY", files_to_modify)):
+        for f in entries:
+            path = f.get("path", "")
+            if not path or path in seen:
+                continue
+            is_test = is_test_source_path(path)
+            if is_test and (change_type == "MODIFY" or exists(path)):
+                logger.warning("Dropping planned change to protected existing test file: %s", path)
+                continue
+            seen.add(path)
+            if change_type == "CREATE" and exists(path):
+                logger.warning("Planned CREATE targets an existing file; treating it as MODIFY: %s", path)
+                modifies.append(FileChange(path=path, reason=f.get("reason", ""), change_type="MODIFY"))
+            elif change_type == "CREATE":
+                creates.append(FileChange(path=path, reason=f.get("reason", ""), change_type="CREATE"))
+            else:
+                modifies.append(FileChange(path=path, reason=f.get("reason", ""), change_type="MODIFY"))
+    return creates, modifies
 
 
 def _apply_capability_decisions(capability_model: dict, decisions: list[dict], retrieved: dict) -> dict:
