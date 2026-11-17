@@ -121,3 +121,36 @@ def test_plan_without_any_caller_for_the_new_adapter_gets_an_entry_point():
     assert _ensure_entry_point(state, {"reuse_existing_abstraction": True}, creates, []) == creates
     modify = [FileChange(path="src/main/java/com/acme/checkout/web/CheckoutController.java", reason="r", change_type="MODIFY")]
     assert _ensure_entry_point(state, {"reuse_existing_abstraction": False}, creates, modify) == creates
+
+
+def test_a_service_is_not_an_entry_point():
+    # Round 5, eval-merchant-app-1: adapter + config + RazorpayWebhookService, nothing calling any of them.
+    state = {"operation_mode": "ADD_PSP", "target_provider": "razorpay", "repository_path": str(MERCHANT_APP)}
+    creates = [FileChange(path=f"src/main/java/com/payshift/merchant/{p}", reason="r", change_type="CREATE")
+               for p in ("provider/RazorpayApiPaymentGateway.java", "service/RazorpayWebhookService.java")]
+    out = _ensure_entry_point(state, {"reuse_existing_abstraction": False}, creates, [])
+    assert out[-1].path == "src/main/java/com/payshift/merchant/web/RazorpayPaymentController.java"
+
+
+def test_repair_is_told_when_a_failure_has_come_back():
+    # Round 5, eval-razorpay-rest-orders-1: static "unused webhookSecret" <-> compile "isValid cannot be
+    # applied" ping-ponged three times until both budgets were gone.
+    from agent.repair import _previous_attempts_note
+    handler = "src/main/java/com/shop/orders/payments/StripeWebhookHandler.java"
+    unused = {"passed": False, "findings": [{"check": "unused_config_value", "severity": "ERROR", "file": handler,
+                                             "line": 20, "message": "injects 'webhookSecret' but never uses it"}]}
+    state = {
+        "static_check_result": unused,
+        "repair_attempts": [
+            {"attempt_number": 1, "kind": "static", "failure_signatures": ["static:unused_config_value:StripeWebhookHandler.java"],
+             "patch_description": "pass webhookSecret to isValid", "files_touched": [handler], "files_rejected": []},
+            {"attempt_number": 2, "kind": "build",
+             "failure_signatures": ["compile:StripeWebhookHandler.java:method isValid in class WebhookSignatureVerifier cannot be applied"],
+             "patch_description": "call isValid with two arguments", "files_touched": [handler], "files_rejected": []},
+        ],
+    }
+    note = _previous_attempts_note(state)
+    assert "THE CURRENT FAILURE HAS RECURRED" in note
+    assert "static:unused_config_value:StripeWebhookHandler.java" in note
+    assert "isValid" in note                      # ...and what the earlier fix for it broke
+    assert "DIFFERENT approach" in note

@@ -146,7 +146,10 @@ def create_plan(state: AgentState, llm: LLMClient) -> dict:
     return {"integration_plan": plan.model_dump(), "capability_model": capability_model}
 
 
-_ENTRY_POINT_SUFFIXES = ("Controller.java", "Service.java", "Router.java", "Listener.java", "Resource.java")
+# Things the framework invokes. A *Service is deliberately not here: it is only
+# reachable if something injects it (live eval: a plan of adapter + config +
+# RazorpayWebhookService had no caller for any of them).
+_ENTRY_POINT_SUFFIXES = ("Controller.java", "Router.java", "Listener.java", "Resource.java", "Endpoint.java")
 
 
 def _ensure_entry_point(state: AgentState, raw: dict, creates: list[FileChange],

@@ -42,6 +42,7 @@ class RepairAttempt(BaseModel):
     kind: str = "build"  # "static" (pre-compile check failure) | "build" (compile/test failure)
     static_checks_passed: bool | None = None
     failure_summary: str
+    failure_signatures: list[str] = Field(default_factory=list)
     diagnosis: str
     patch_description: str
     files_touched: list[str]

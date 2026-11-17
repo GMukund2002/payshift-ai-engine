@@ -145,7 +145,7 @@ def test_next_diagnosis_is_told_what_was_already_tried_and_rejected():
                                                "files_to_inspect": [], "doc_query": None})])
     diagnose_failures(state, llm)
     prompt = llm.calls[0][1]
-    assert "PREVIOUS REPAIR ATTEMPTS" in prompt and "edit the test instead" in prompt
+    assert "REPAIR HISTORY THIS RUN" in prompt and "edit the test instead" in prompt
     assert "existing tests are protected" in prompt
 
 
