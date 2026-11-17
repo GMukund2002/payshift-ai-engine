@@ -33,14 +33,14 @@ requires a target-provider bean that something actually depends on.
 | 3 | 8 | 4 | 3 (37.5%) | 1 of 4 | 0 |
 | 4 | 5 completed\* | 5 | **5 (100%)** | **0 of 5** | 0 |
 | 5 | 8 | 6 | 6 (75%) | 0 of 6 | 0 |
+| 6 | 8 | 8 | **8 (100%)** | **0 of 8** | 0 |
 
 \* Round 4 stopped when the OpenAI account ran out of credits; 3 runs never
 executed (`multi-psp-router` x2, one `razorpay-rest-orders`) and are not counted.
 Every round's false VERIFIED was caught by the hidden checks, root-caused, and
 turned into a deterministic static check plus a regression test before the
-next round (see `docs/evaluation.md`). Since the last fixes (rounds 4-5): 11 of 13
-runs produced a real integration and none was falsely VERIFIED. **Read these as
-directional**: 33 runs in total, 4 apps, one model. Raw results: `ai-engine/evaluation/live_results/`.
+next round (see `docs/evaluation.md`). Rounds 4-6 combined: 19 of 21 runs produced a real integration and none was
+falsely VERIFIED. **Read these as directional**: 41 runs in total, 4 apps, one model. Raw results: `ai-engine/evaluation/live_results/`.
 
 What has held in every run so far: no existing test was ever broken, provider
 detection was correct in every run, and every run stayed within its repair budget.
@@ -123,10 +123,10 @@ compiles and tests the customer's code inside the container.
 
 ## Known limitations
 
-- **The sample is small.** 33 live runs over 4 apps with one model; the
-  post-fix figure (11 of 13 real, 0 false VERIFIED) needs more rounds and more
-  apps before it is quoted as a rate. The 2 round-5 failures exhausted their
-  repair budgets and have not been root-caused yet.
+- **The sample is small.** 41 live runs over 4 apps with one model. The corpus
+  was also the development set: every fix was driven by failures on these same
+  apps, so the round-6 result (8 of 8) will not carry over unchanged to unseen
+  codebases. Held-out apps are the next thing to add.
 - **Hidden checks prove wiring, not correctness against the provider.** A
   change that boots, is reachable and calls the provider's API host can still
   send a wrong request body. Provider contract tests (recorded sandbox
