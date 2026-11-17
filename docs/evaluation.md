@@ -51,6 +51,34 @@ integrations, no false VERIFIED. The corpus doubled as the development set --
 every fix came from failures on these apps -- so held-out apps are needed before
 any rate is quoted for unseen codebases. Raw per-run JSON: `ai-engine/evaluation/live_results/`.
 
+### Held-out results (`--split held-out`, gpt-4o, pipeline unchanged)
+
+Three apps committed before the pipeline was ever run on them
+(`ai-engine/evaluation/corpus.py`, `HELD_OUT`), 2 runs each:
+
+| App | Runs | Real integration | False VERIFIED |
+|---|---|---|---|
+| `heldout-subscriptions-lombok` (Lombok, feature packages) | 2 | 2 | 0 |
+| `heldout-invoices-jdbc` (JdbcTemplate, `.properties`, static Stripe API) | 2 | 2 | 0 |
+| `heldout-storefront-paypal` (REST-only app, unqualified `RestTemplate`) | 2 | 0 | 0 |
+| **Total** | **6** | **4 (67%)** | **0** |
+
+No existing test broken; provider detection correct in all 6. Both failures
+were reported as `UNRESOLVED_FAILURE`, never as success, and expose real
+product gaps rather than tuning issues:
+1. **No way to add a dependency.** One run wrote the Stripe integration against
+   the Stripe Java SDK, which this REST-only app does not depend on; `pom.xml`
+   is not editable, so it could not compile and the repairs never settled on
+   plain REST.
+2. **A fix that requires touching existing code.** The other run added a second
+   `RestTemplate` bean; the existing `PaypalClient` injects `RestTemplate` by
+   type, so the checker correctly flagged the ambiguity -- but every repair
+   tried to edit `PaypalClient` (not editable) instead of not defining a
+   competing bean.
+
+These are deliberately left unfixed here: once a failure on a held-out app
+drives a change, that app belongs to the development corpus.
+
 ## Deterministic benchmark (`make benchmark`, `ai-engine/evaluation/benchmark.py`)
 
 Detection precision/recall and operation recall against known ground truth,

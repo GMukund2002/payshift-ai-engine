@@ -1,0 +1,518 @@
+{
+  "generated_at": "20261117T181814Z",
+  "split": "held-out",
+  "models": [
+    "gpt-4o"
+  ],
+  "summary": {
+    "runs": 6,
+    "infra_errors_excluded": 0,
+    "verified_rate": 0.667,
+    "real_integration_rate": 0.667,
+    "false_verified_rate": 0.0,
+    "existing_tests_broken": 0,
+    "provider_detection_correct": 1.0,
+    "status_counts": {
+      "UNRESOLVED_FAILURE": 2,
+      "VERIFIED": 4
+    },
+    "avg_prompt_tokens": 40795,
+    "avg_completion_tokens": 3705,
+    "avg_duration_seconds": 45.0
+  },
+  "runs": [
+    {
+      "case": "heldout-subscriptions-lombok",
+      "held_out": true,
+      "repeat": 1,
+      "run_id": "eval-heldout-subscriptions-lombok-1-c5478c",
+      "status": "VERIFIED",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "stripe"
+      ],
+      "expected_providers": [
+        "stripe"
+      ],
+      "files_created": [
+        "src/main/java/com/billing/subs/config/RazorpayConfig.java",
+        "src/main/java/com/billing/subs/payment/RazorpayPaymentProvider.java",
+        "src/main/java/com/billing/subs/payment/RazorpayPaymentProviderImpl.java",
+        "src/main/java/com/billing/subs/web/RazorpayPaymentController.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 1,
+        "build": 0
+      },
+      "static_findings_final": [],
+      "tests": {
+        "tests_run": 3,
+        "failures": 0,
+        "errors": 0
+      },
+      "hidden": {
+        "context_has_provider_bean": true,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/billing/subs/payment/RazorpayPaymentProviderImpl.java: api.razorpay.com"
+        ],
+        "existing_tests_preserved": true,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "iator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)\n2026-11-17T18:14:03.830Z  INFO 235 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T18:14:04.541Z  INFO 235 --- [           main] c.b.subs.PayShiftHiddenWiringCheckTest   : Started PayShiftHiddenWiringCheckTest in 3.715 seconds (process running for 7.285)\n2026-11-17T18:14:05.048Z  INFO 235 --- [ionShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T18:14:05.050Z  INFO 235 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...\n2026-11-17T18:14:05.051Z  INFO 235 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.\n\nWARNING: A Java agent has been loaded dynamically (/root/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar)\nWARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning\nWARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information\nWARNING: Dynamic loading of agents will be disallowed by default in a future release\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n",
+        "integration_is_real": true
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 8,
+        "prompt_tokens": 23965,
+        "completion_tokens": 2201,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 1436,
+            "completion_tokens": 200
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 3004,
+            "completion_tokens": 508
+          },
+          "generate_code": {
+            "calls": 4,
+            "prompt_tokens": 15953,
+            "completion_tokens": 814
+          },
+          "diagnose_failures": {
+            "calls": 1,
+            "prompt_tokens": 1357,
+            "completion_tokens": 112
+          },
+          "repair_code": {
+            "calls": 1,
+            "prompt_tokens": 2215,
+            "completion_tokens": 567
+          }
+        }
+      },
+      "duration_seconds": 39.4,
+      "workspace": "/app/workspaces/eval-heldout-subscriptions-lombok-1-c5478c/modified"
+    },
+    {
+      "case": "heldout-subscriptions-lombok",
+      "held_out": true,
+      "repeat": 2,
+      "run_id": "eval-heldout-subscriptions-lombok-2-c386e9",
+      "status": "VERIFIED",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "stripe"
+      ],
+      "expected_providers": [
+        "stripe"
+      ],
+      "files_created": [
+        "src/main/java/com/billing/subs/config/RazorpayConfig.java",
+        "src/main/java/com/billing/subs/payment/RazorpayPaymentProvider.java",
+        "src/main/java/com/billing/subs/payment/RazorpayPaymentProviderImpl.java",
+        "src/main/java/com/billing/subs/web/RazorpayPaymentController.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 2,
+        "build": 0
+      },
+      "static_findings_final": [],
+      "tests": {
+        "tests_run": 3,
+        "failures": 0,
+        "errors": 0
+      },
+      "hidden": {
+        "context_has_provider_bean": true,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/billing/subs/payment/RazorpayPaymentProviderImpl.java: api.razorpay.com"
+        ],
+        "existing_tests_preserved": true,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "iator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)\n2026-11-17T18:14:56.841Z  INFO 546 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T18:14:57.506Z  INFO 546 --- [           main] c.b.subs.PayShiftHiddenWiringCheckTest   : Started PayShiftHiddenWiringCheckTest in 3.525 seconds (process running for 6.896)\n2026-11-17T18:14:58.019Z  INFO 546 --- [ionShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T18:14:58.021Z  INFO 546 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...\n2026-11-17T18:14:58.022Z  INFO 546 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.\n\nWARNING: A Java agent has been loaded dynamically (/root/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar)\nWARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning\nWARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information\nWARNING: Dynamic loading of agents will be disallowed by default in a future release\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n",
+        "integration_is_real": true
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 10,
+        "prompt_tokens": 28582,
+        "completion_tokens": 3313,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 1436,
+            "completion_tokens": 200
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 3004,
+            "completion_tokens": 536
+          },
+          "generate_code": {
+            "calls": 4,
+            "prompt_tokens": 16549,
+            "completion_tokens": 1012
+          },
+          "diagnose_failures": {
+            "calls": 2,
+            "prompt_tokens": 3478,
+            "completion_tokens": 268
+          },
+          "repair_code": {
+            "calls": 2,
+            "prompt_tokens": 4115,
+            "completion_tokens": 1297
+          }
+        }
+      },
+      "duration_seconds": 45.5,
+      "workspace": "/app/workspaces/eval-heldout-subscriptions-lombok-2-c386e9/modified"
+    },
+    {
+      "case": "heldout-storefront-paypal",
+      "held_out": true,
+      "repeat": 1,
+      "run_id": "eval-heldout-storefront-paypal-1-419504",
+      "status": "UNRESOLVED_FAILURE",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "paypal"
+      ],
+      "expected_providers": [
+        "paypal"
+      ],
+      "files_created": [
+        "src/main/java/com/store/front/config/StripeConfig.java",
+        "src/main/java/com/store/front/payment/StripePaymentProvider.java",
+        "src/main/java/com/store/front/payment/StripePaymentProviderImpl.java",
+        "src/main/java/com/store/front/web/StripeController.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 3,
+        "build": 3
+      },
+      "static_findings_final": [
+        "ERROR:unused_config_value"
+      ],
+      "tests": {
+        "tests_run": null,
+        "failures": null,
+        "errors": null
+      },
+      "hidden": {
+        "context_has_provider_bean": null,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/store/front/payment/StripePaymentProviderImpl.java: com.stripe."
+        ],
+        "existing_tests_preserved": null,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "",
+        "integration_is_real": false
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 18,
+        "prompt_tokens": 71440,
+        "completion_tokens": 5848,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 1243,
+            "completion_tokens": 223
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 6017,
+            "completion_tokens": 531
+          },
+          "generate_code": {
+            "calls": 4,
+            "prompt_tokens": 30912,
+            "completion_tokens": 1422
+          },
+          "diagnose_failures": {
+            "calls": 6,
+            "prompt_tokens": 16564,
+            "completion_tokens": 702
+          },
+          "repair_code": {
+            "calls": 6,
+            "prompt_tokens": 16704,
+            "completion_tokens": 2970
+          }
+        }
+      },
+      "duration_seconds": 63.5,
+      "workspace": "/app/workspaces/eval-heldout-storefront-paypal-1-419504/modified"
+    },
+    {
+      "case": "heldout-storefront-paypal",
+      "held_out": true,
+      "repeat": 2,
+      "run_id": "eval-heldout-storefront-paypal-2-536b07",
+      "status": "UNRESOLVED_FAILURE",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "paypal"
+      ],
+      "expected_providers": [
+        "paypal"
+      ],
+      "files_created": [
+        "src/main/java/com/store/front/config/StripeConfig.java",
+        "src/main/java/com/store/front/stripe/StripeClient.java",
+        "src/main/java/com/store/front/stripe/StripePaymentService.java",
+        "src/main/java/com/store/front/stripe/StripeRefundService.java"
+      ],
+      "files_modified": [
+        "src/main/java/com/store/front/web/PurchaseController.java"
+      ],
+      "repairs": {
+        "static": 3,
+        "build": 0
+      },
+      "static_findings_final": [
+        "ERROR:ambiguous_bean"
+      ],
+      "tests": {
+        "tests_run": null,
+        "failures": null,
+        "errors": null
+      },
+      "hidden": {
+        "context_has_provider_bean": null,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/store/front/stripe/StripeClient.java: api.stripe.com"
+        ],
+        "existing_tests_preserved": null,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "",
+        "integration_is_real": false
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 13,
+        "prompt_tokens": 65171,
+        "completion_tokens": 5431,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 1243,
+            "completion_tokens": 249
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 6043,
+            "completion_tokens": 570
+          },
+          "generate_code": {
+            "calls": 5,
+            "prompt_tokens": 39830,
+            "completion_tokens": 1839
+          },
+          "diagnose_failures": {
+            "calls": 3,
+            "prompt_tokens": 8293,
+            "completion_tokens": 407
+          },
+          "repair_code": {
+            "calls": 3,
+            "prompt_tokens": 9762,
+            "completion_tokens": 2366
+          }
+        }
+      },
+      "duration_seconds": 47.9,
+      "workspace": "/app/workspaces/eval-heldout-storefront-paypal-2-536b07/modified"
+    },
+    {
+      "case": "heldout-invoices-jdbc",
+      "held_out": true,
+      "repeat": 1,
+      "run_id": "eval-heldout-invoices-jdbc-1-012b7f",
+      "status": "VERIFIED",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "stripe"
+      ],
+      "expected_providers": [
+        "stripe"
+      ],
+      "files_created": [
+        "src/main/java/com/ledger/invoices/config/RazorpayConfig.java",
+        "src/main/java/com/ledger/invoices/payments/RazorpayPaymentAdapter.java",
+        "src/main/java/com/ledger/invoices/payments/RazorpayPaymentProvider.java",
+        "src/main/java/com/ledger/invoices/payments/RazorpayPaymentService.java",
+        "src/main/java/com/ledger/invoices/web/RazorpayPaymentController.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 1,
+        "build": 0
+      },
+      "static_findings_final": [],
+      "tests": {
+        "tests_run": 3,
+        "failures": 0,
+        "errors": 0
+      },
+      "hidden": {
+        "context_has_provider_bean": true,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/ledger/invoices/payments/RazorpayPaymentAdapter.java: api.razorpay.com"
+        ],
+        "existing_tests_preserved": true,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "efault profile: \"default\"\n2026-11-17T18:17:33.085Z  INFO 1285 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...\n2026-11-17T18:17:33.232Z  INFO 1285 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection conn0: url=jdbc:h2:mem:ledger user=SA\n2026-11-17T18:17:33.234Z  INFO 1285 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.\n2026-11-17T18:17:33.725Z  INFO 1285 --- [           main] c.l.i.PayShiftHiddenWiringCheckTest      : Started PayShiftHiddenWiringCheckTest in 1.895 seconds (process running for 4.816)\n2026-11-17T18:17:34.386Z  INFO 1285 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...\n2026-11-17T18:17:34.387Z  INFO 1285 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.\n\nWARNING: A Java agent has been loaded dynamically (/root/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar)\nWARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning\nWARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information\nWARNING: Dynamic loading of agents will be disallowed by default in a future release\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n",
+        "integration_is_real": true
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 9,
+        "prompt_tokens": 30476,
+        "completion_tokens": 2918,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 1567,
+            "completion_tokens": 227
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 3034,
+            "completion_tokens": 689
+          },
+          "generate_code": {
+            "calls": 5,
+            "prompt_tokens": 21328,
+            "completion_tokens": 1250
+          },
+          "diagnose_failures": {
+            "calls": 1,
+            "prompt_tokens": 1887,
+            "completion_tokens": 114
+          },
+          "repair_code": {
+            "calls": 1,
+            "prompt_tokens": 2660,
+            "completion_tokens": 638
+          }
+        }
+      },
+      "duration_seconds": 39.4,
+      "workspace": "/app/workspaces/eval-heldout-invoices-jdbc-1-012b7f/modified"
+    },
+    {
+      "case": "heldout-invoices-jdbc",
+      "held_out": true,
+      "repeat": 2,
+      "run_id": "eval-heldout-invoices-jdbc-2-3b4869",
+      "status": "VERIFIED",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "stripe"
+      ],
+      "expected_providers": [
+        "stripe"
+      ],
+      "files_created": [
+        "src/main/java/com/ledger/invoices/config/RazorpayConfig.java",
+        "src/main/java/com/ledger/invoices/payments/RazorpayPaymentAdapter.java",
+        "src/main/java/com/ledger/invoices/payments/RazorpayPaymentProvider.java",
+        "src/main/java/com/ledger/invoices/web/RazorpayPaymentController.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 1,
+        "build": 0
+      },
+      "static_findings_final": [],
+      "tests": {
+        "tests_run": 3,
+        "failures": 0,
+        "errors": 0
+      },
+      "hidden": {
+        "context_has_provider_bean": true,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/ledger/invoices/payments/RazorpayPaymentAdapter.java: api.razorpay.com"
+        ],
+        "existing_tests_preserved": true,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "default profile: \"default\"\n2026-11-17T18:18:12.872Z  INFO 1575 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Starting...\n2026-11-17T18:18:13.060Z  INFO 1575 --- [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-1 - Added connection conn0: url=jdbc:h2:mem:ledger user=SA\n2026-11-17T18:18:13.062Z  INFO 1575 --- [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Start completed.\n2026-11-17T18:18:13.577Z  INFO 1575 --- [           main] c.l.i.PayShiftHiddenWiringCheckTest      : Started PayShiftHiddenWiringCheckTest in 1.96 seconds (process running for 4.898)\n2026-11-17T18:18:14.324Z  INFO 1575 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...\n2026-11-17T18:18:14.326Z  INFO 1575 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.\n\nWARNING: A Java agent has been loaded dynamically (/root/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar)\nWARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning\nWARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information\nWARNING: Dynamic loading of agents will be disallowed by default in a future release\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n",
+        "integration_is_real": true
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 8,
+        "prompt_tokens": 25135,
+        "completion_tokens": 2518,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 1567,
+            "completion_tokens": 204
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 3011,
+            "completion_tokens": 539
+          },
+          "generate_code": {
+            "calls": 4,
+            "prompt_tokens": 16530,
+            "completion_tokens": 1045
+          },
+          "diagnose_failures": {
+            "calls": 1,
+            "prompt_tokens": 1585,
+            "completion_tokens": 110
+          },
+          "repair_code": {
+            "calls": 1,
+            "prompt_tokens": 2442,
+            "completion_tokens": 620
+          }
+        }
+      },
+      "duration_seconds": 34.2,
+      "workspace": "/app/workspaces/eval-heldout-invoices-jdbc-2-3b4869/modified"
+    }
+  ]
+}

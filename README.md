@@ -42,6 +42,11 @@ turned into a deterministic static check plus a regression test before the
 next round (see `docs/evaluation.md`). Rounds 4-6 combined: 19 of 21 runs produced a real integration and none was
 falsely VERIFIED. **Read these as directional**: 41 runs in total, 4 apps, one model. Raw results: `ai-engine/evaluation/live_results/`.
 
+**Held-out check** (3 apps committed before the pipeline ever ran on them, 6 runs,
+nothing tuned): 4 of 6 real integrations, 0 false VERIFIED. That is the more
+honest estimate for an unseen codebase; see `docs/evaluation.md` for the two
+failures and the product gaps behind them.
+
 What has held in every run so far: no existing test was ever broken, provider
 detection was correct in every run, and every run stayed within its repair budget.
 
