@@ -35,6 +35,9 @@ class EvalCase:
     operation_mode: str = "ADD_PSP"
     notes: str = ""
     tags: tuple[str, ...] = field(default_factory=tuple)
+    # Held-out cases are never used to develop fixes: the pipeline is run on them
+    # unchanged to estimate how results carry over to codebases it wasn't tuned on.
+    held_out: bool = False
 
     @property
     def path(self) -> Path:
@@ -74,10 +77,38 @@ CORPUS: list[EvalCase] = [
 ]
 
 
-def by_name(names: list[str] | None) -> list[EvalCase]:
+HELD_OUT: list[EvalCase] = [
+    EvalCase(
+        name="heldout-subscriptions-lombok", held_out=True,
+        app_dir="heldout-subscriptions-lombok", base_package="com.billing.subs",
+        existing_providers=frozenset({"stripe"}), target_provider="razorpay", baseline_tests=3,
+        notes="Lombok throughout (@RequiredArgsConstructor, @Slf4j, @Getter), feature packages, StripeClient.",
+        tags=("lombok", "sdk", "abstraction:none"),
+    ),
+    EvalCase(
+        name="heldout-storefront-paypal", held_out=True,
+        app_dir="heldout-storefront-paypal", base_package="com.store.front",
+        existing_providers=frozenset({"paypal"}), target_provider="stripe", baseline_tests=3,
+        notes="PayPal over RestTemplate injected by type with no qualifier: a second RestTemplate bean "
+              "breaks the existing client.",
+        tags=("rest", "abstraction:none", "bean-ambiguity-trap"),
+    ),
+    EvalCase(
+        name="heldout-invoices-jdbc", held_out=True,
+        app_dir="heldout-invoices-jdbc", base_package="com.ledger.invoices",
+        existing_providers=frozenset({"stripe"}), target_provider="razorpay", baseline_tests=3,
+        notes="JdbcTemplate + schema.sql (no JPA), application.properties, Stripe's static SDK API.",
+        tags=("jdbc", "properties", "sdk", "abstraction:none"),
+    ),
+]
+
+
+def by_name(names: list[str] | None, split: str = "dev") -> list[EvalCase]:
+    """split: "dev" (the development corpus), "held-out", or "all". Explicit names win."""
+    everything = CORPUS + HELD_OUT
     if not names:
-        return list(CORPUS)
-    known = {c.name: c for c in CORPUS}
+        return {"dev": list(CORPUS), "held-out": list(HELD_OUT), "all": everything}[split]
+    known = {c.name: c for c in everything}
     missing = [n for n in names if n not in known]
     if missing:
         raise SystemExit(f"Unknown eval case(s): {missing}. Known: {sorted(known)}")

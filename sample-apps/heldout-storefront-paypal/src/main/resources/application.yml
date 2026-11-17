@@ -1,0 +1,12 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:store;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+store:
+  paypal:
+    base-url: https://api-m.sandbox.paypal.com
+    client-id: ${PAYPAL_CLIENT_ID:paypal_client_placeholder}
+    client-secret: ${PAYPAL_CLIENT_SECRET:paypal_secret_placeholder}

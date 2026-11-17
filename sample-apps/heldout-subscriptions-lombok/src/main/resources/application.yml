@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:subs;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+billing:
+  stripe:
+    secret-key: ${STRIPE_SECRET_KEY:sk_test_placeholder}

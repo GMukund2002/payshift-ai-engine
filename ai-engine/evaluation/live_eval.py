@@ -63,7 +63,7 @@ def run_case(case: EvalCase, repeat: int) -> dict:
         # counted separately and excluded from the quality rates.
         status = "INFRA_ERROR"
     return {
-        "case": case.name, "repeat": repeat, "run_id": run_id, "status": status, "error": error,
+        "case": case.name, "held_out": case.held_out, "repeat": repeat, "run_id": run_id, "status": status, "error": error,
         "blocker_reason": report.get("blocker_reason"),
         "detected_providers": final.get("existing_providers"),
         "expected_providers": sorted(case.existing_providers),
@@ -110,19 +110,21 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--cases", default="", help="comma-separated case names (default: all)")
     parser.add_argument("--repeats", type=int, default=1)
+    parser.add_argument("--split", choices=["dev", "held-out", "all"], default="dev",
+                        help="dev = development corpus (default); held-out = apps no fix was developed against")
     parser.add_argument("--list", action="store_true", help="list corpus cases and exit")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s %(name)s: %(message)s")
 
     if args.list:
-        for c in CORPUS:
+        for c in by_name(None, "all"):
             print(f"{c.name:24} {sorted(c.existing_providers)} -> {c.target_provider:10} {c.notes}")
         return 0
     if isinstance(get_llm_client(), NullLLMClient):
         print("No LLM configured (OPENAI_API_KEY / ANTHROPIC_API_KEY); a live eval needs one.", file=sys.stderr)
         return 2
 
-    cases = by_name([c for c in args.cases.split(",") if c])
+    cases = by_name([c for c in args.cases.split(",") if c], args.split)
     runs = []
     for case in cases:
         for repeat in range(1, args.repeats + 1):
@@ -141,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out = RESULTS_DIR / f"{stamp}.json"
     models = sorted({m for r in runs for m in ((r["llm_usage"] or {}).get("models") or [])})
-    out.write_text(json.dumps({"generated_at": stamp, "models": models, "summary": summary, "runs": runs}, indent=2),
+    out.write_text(json.dumps({"generated_at": stamp, "split": args.split, "models": models, "summary": summary, "runs": runs}, indent=2),
                    encoding="utf-8")
     print("\nSUMMARY", json.dumps(summary, indent=2))
     print(f"\nWritten to {out}")
