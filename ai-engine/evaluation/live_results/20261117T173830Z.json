@@ -1,0 +1,661 @@
+{
+  "generated_at": "20261117T173830Z",
+  "models": [
+    "gpt-4o"
+  ],
+  "summary": {
+    "runs": 8,
+    "infra_errors_excluded": 0,
+    "verified_rate": 0.75,
+    "real_integration_rate": 0.75,
+    "false_verified_rate": 0.0,
+    "existing_tests_broken": 0,
+    "provider_detection_correct": 1.0,
+    "status_counts": {
+      "UNRESOLVED_FAILURE": 2,
+      "VERIFIED": 6
+    },
+    "avg_prompt_tokens": 41230,
+    "avg_completion_tokens": 3752,
+    "avg_duration_seconds": 56.3
+  },
+  "runs": [
+    {
+      "case": "merchant-app",
+      "repeat": 1,
+      "run_id": "eval-merchant-app-1-f127ed",
+      "status": "UNRESOLVED_FAILURE",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "stripe"
+      ],
+      "expected_providers": [
+        "stripe"
+      ],
+      "files_created": [
+        "src/main/java/com/payshift/merchant/config/RazorpayConfig.java",
+        "src/main/java/com/payshift/merchant/provider/RazorpayApiPaymentGateway.java",
+        "src/main/java/com/payshift/merchant/service/RazorpayWebhookService.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 3,
+        "build": 0
+      },
+      "static_findings_final": [
+        "ERROR:unreachable_integration",
+        "ERROR:unreachable_integration"
+      ],
+      "tests": {
+        "tests_run": null,
+        "failures": null,
+        "errors": null
+      },
+      "hidden": {
+        "context_has_provider_bean": null,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/payshift/merchant/provider/RazorpayApiPaymentGateway.java: api.razorpay.com"
+        ],
+        "existing_tests_preserved": null,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "",
+        "integration_is_real": false
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 11,
+        "prompt_tokens": 49802,
+        "completion_tokens": 5409,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 2762,
+            "completion_tokens": 263
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 6092,
+            "completion_tokens": 695
+          },
+          "generate_code": {
+            "calls": 3,
+            "prompt_tokens": 25235,
+            "completion_tokens": 1435
+          },
+          "diagnose_failures": {
+            "calls": 3,
+            "prompt_tokens": 7384,
+            "completion_tokens": 446
+          },
+          "repair_code": {
+            "calls": 3,
+            "prompt_tokens": 8329,
+            "completion_tokens": 2570
+          }
+        }
+      },
+      "duration_seconds": 67.9,
+      "workspace": "/app/workspaces/eval-merchant-app-1-f127ed/modified"
+    },
+    {
+      "case": "merchant-app",
+      "repeat": 2,
+      "run_id": "eval-merchant-app-2-3bd060",
+      "status": "VERIFIED",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "stripe"
+      ],
+      "expected_providers": [
+        "stripe"
+      ],
+      "files_created": [
+        "src/main/java/com/payshift/merchant/config/RazorpayConfig.java",
+        "src/main/java/com/payshift/merchant/provider/RazorpayApiPaymentGateway.java",
+        "src/main/java/com/payshift/merchant/provider/RazorpayPaymentGateway.java",
+        "src/main/java/com/payshift/merchant/web/RazorpayPaymentController.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 1,
+        "build": 1
+      },
+      "static_findings_final": [],
+      "tests": {
+        "tests_run": 9,
+        "failures": 0,
+        "errors": 0
+      },
+      "hidden": {
+        "context_has_provider_bean": true,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/payshift/merchant/provider/RazorpayApiPaymentGateway.java: api.razorpay.com"
+        ],
+        "existing_tests_preserved": true,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "    main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning\n2026-11-17T17:32:30.153Z  INFO 437 --- [merchant-app] [           main] c.p.m.PayShiftHiddenWiringCheckTest      : Started PayShiftHiddenWiringCheckTest in 4.229 seconds (process running for 7.797)\n2026-11-17T17:32:30.677Z  INFO 437 --- [merchant-app] [ionShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T17:32:30.679Z  INFO 437 --- [merchant-app] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...\n2026-11-17T17:32:30.695Z  INFO 437 --- [merchant-app] [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.\n\nWARNING: A Java agent has been loaded dynamically (/root/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar)\nWARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning\nWARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information\nWARNING: Dynamic loading of agents will be disallowed by default in a future release\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n",
+        "integration_is_real": true
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 10,
+        "prompt_tokens": 51866,
+        "completion_tokens": 3667,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 2762,
+            "completion_tokens": 273
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 6103,
+            "completion_tokens": 735
+          },
+          "generate_code": {
+            "calls": 4,
+            "prompt_tokens": 35042,
+            "completion_tokens": 1119
+          },
+          "diagnose_failures": {
+            "calls": 2,
+            "prompt_tokens": 3727,
+            "completion_tokens": 216
+          },
+          "repair_code": {
+            "calls": 2,
+            "prompt_tokens": 4232,
+            "completion_tokens": 1324
+          }
+        }
+      },
+      "duration_seconds": 62.1,
+      "workspace": "/app/workspaces/eval-merchant-app-2-3bd060/modified"
+    },
+    {
+      "case": "stripe-direct-checkout",
+      "repeat": 1,
+      "run_id": "eval-stripe-direct-checkout-1-cf6db0",
+      "status": "VERIFIED",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "stripe"
+      ],
+      "expected_providers": [
+        "stripe"
+      ],
+      "files_created": [
+        "src/main/java/com/acme/checkout/payment/RazorpayPaymentAdapter.java",
+        "src/main/java/com/acme/checkout/payment/RazorpayPaymentProvider.java",
+        "src/main/java/com/acme/checkout/payment/config/RazorpayConfig.java",
+        "src/main/java/com/acme/checkout/payment/service/RazorpayPaymentService.java",
+        "src/main/java/com/acme/checkout/payment/web/RazorpayPaymentController.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 1,
+        "build": 0
+      },
+      "static_findings_final": [],
+      "tests": {
+        "tests_run": 5,
+        "failures": 0,
+        "errors": 0
+      },
+      "hidden": {
+        "context_has_provider_bean": true,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/acme/checkout/payment/RazorpayPaymentAdapter.java: api.razorpay.com"
+        ],
+        "existing_tests_preserved": true,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "iator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)\n2026-11-17T17:33:28.515Z  INFO 729 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T17:33:29.212Z  INFO 729 --- [           main] c.a.c.PayShiftHiddenWiringCheckTest      : Started PayShiftHiddenWiringCheckTest in 3.778 seconds (process running for 7.211)\n2026-11-17T17:33:29.713Z  INFO 729 --- [ionShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T17:33:29.714Z  INFO 729 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...\n2026-11-17T17:33:29.719Z  INFO 729 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.\n\nWARNING: A Java agent has been loaded dynamically (/root/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar)\nWARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning\nWARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information\nWARNING: Dynamic loading of agents will be disallowed by default in a future release\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n",
+        "integration_is_real": true
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 9,
+        "prompt_tokens": 31810,
+        "completion_tokens": 2566,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 1620,
+            "completion_tokens": 205
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 3009,
+            "completion_tokens": 619
+          },
+          "generate_code": {
+            "calls": 5,
+            "prompt_tokens": 22498,
+            "completion_tokens": 1373
+          },
+          "diagnose_failures": {
+            "calls": 1,
+            "prompt_tokens": 2120,
+            "completion_tokens": 132
+          },
+          "repair_code": {
+            "calls": 1,
+            "prompt_tokens": 2563,
+            "completion_tokens": 237
+          }
+        }
+      },
+      "duration_seconds": 51.2,
+      "workspace": "/app/workspaces/eval-stripe-direct-checkout-1-cf6db0/modified"
+    },
+    {
+      "case": "stripe-direct-checkout",
+      "repeat": 2,
+      "run_id": "eval-stripe-direct-checkout-2-5c751d",
+      "status": "VERIFIED",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "stripe"
+      ],
+      "expected_providers": [
+        "stripe"
+      ],
+      "files_created": [
+        "src/main/java/com/acme/checkout/payment/RazorpayPaymentAdapter.java",
+        "src/main/java/com/acme/checkout/payment/RazorpayPaymentProvider.java",
+        "src/main/java/com/acme/checkout/payment/config/RazorpayConfig.java",
+        "src/main/java/com/acme/checkout/web/RazorpayPaymentController.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 1,
+        "build": 0
+      },
+      "static_findings_final": [],
+      "tests": {
+        "tests_run": 5,
+        "failures": 0,
+        "errors": 0
+      },
+      "hidden": {
+        "context_has_provider_bean": true,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/acme/checkout/payment/RazorpayPaymentAdapter.java: api.razorpay.com"
+        ],
+        "existing_tests_preserved": true,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)\n2026-11-17T17:34:17.861Z  INFO 1021 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T17:34:18.581Z  INFO 1021 --- [           main] c.a.c.PayShiftHiddenWiringCheckTest      : Started PayShiftHiddenWiringCheckTest in 3.614 seconds (process running for 6.836)\n2026-11-17T17:34:19.173Z  INFO 1021 --- [ionShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T17:34:19.175Z  INFO 1021 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...\n2026-11-17T17:34:19.178Z  INFO 1021 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.\n\nWARNING: A Java agent has been loaded dynamically (/root/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar)\nWARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning\nWARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information\nWARNING: Dynamic loading of agents will be disallowed by default in a future release\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n",
+        "integration_is_real": true
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 8,
+        "prompt_tokens": 26003,
+        "completion_tokens": 2511,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 1620,
+            "completion_tokens": 210
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 3014,
+            "completion_tokens": 548
+          },
+          "generate_code": {
+            "calls": 4,
+            "prompt_tokens": 17382,
+            "completion_tokens": 1021
+          },
+          "diagnose_failures": {
+            "calls": 1,
+            "prompt_tokens": 1565,
+            "completion_tokens": 109
+          },
+          "repair_code": {
+            "calls": 1,
+            "prompt_tokens": 2422,
+            "completion_tokens": 623
+          }
+        }
+      },
+      "duration_seconds": 42.0,
+      "workspace": "/app/workspaces/eval-stripe-direct-checkout-2-5c751d/modified"
+    },
+    {
+      "case": "razorpay-rest-orders",
+      "repeat": 1,
+      "run_id": "eval-razorpay-rest-orders-1-040c9c",
+      "status": "UNRESOLVED_FAILURE",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "razorpay"
+      ],
+      "expected_providers": [
+        "razorpay"
+      ],
+      "files_created": [
+        "src/main/java/com/shop/orders/config/StripeConfiguration.java",
+        "src/main/java/com/shop/orders/payments/StripePaymentAdapter.java",
+        "src/main/java/com/shop/orders/payments/StripeRefundAdapter.java",
+        "src/main/java/com/shop/orders/payments/StripeWebhookHandler.java",
+        "src/main/java/com/shop/orders/web/StripePaymentController.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 3,
+        "build": 3
+      },
+      "static_findings_final": [
+        "ERROR:unused_config_value"
+      ],
+      "tests": {
+        "tests_run": null,
+        "failures": null,
+        "errors": null
+      },
+      "hidden": {
+        "context_has_provider_bean": null,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/shop/orders/config/StripeConfiguration.java: api.stripe.com"
+        ],
+        "existing_tests_preserved": null,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "",
+        "integration_is_real": false
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 19,
+        "prompt_tokens": 97562,
+        "completion_tokens": 8823,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 1512,
+            "completion_tokens": 264
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 6896,
+            "completion_tokens": 626
+          },
+          "generate_code": {
+            "calls": 5,
+            "prompt_tokens": 51010,
+            "completion_tokens": 2041
+          },
+          "diagnose_failures": {
+            "calls": 6,
+            "prompt_tokens": 18806,
+            "completion_tokens": 714
+          },
+          "repair_code": {
+            "calls": 6,
+            "prompt_tokens": 19338,
+            "completion_tokens": 5178
+          }
+        }
+      },
+      "duration_seconds": 93.4,
+      "workspace": "/app/workspaces/eval-razorpay-rest-orders-1-040c9c/modified"
+    },
+    {
+      "case": "razorpay-rest-orders",
+      "repeat": 2,
+      "run_id": "eval-razorpay-rest-orders-2-ff53cf",
+      "status": "VERIFIED",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "razorpay"
+      ],
+      "expected_providers": [
+        "razorpay"
+      ],
+      "files_created": [
+        "src/main/java/com/shop/orders/config/StripeConfig.java",
+        "src/main/java/com/shop/orders/payments/StripeGateway.java",
+        "src/main/java/com/shop/orders/web/StripeController.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 0,
+        "build": 0
+      },
+      "static_findings_final": [],
+      "tests": {
+        "tests_run": 5,
+        "failures": 0,
+        "errors": 0
+      },
+      "hidden": {
+        "context_has_provider_bean": true,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/shop/orders/config/StripeConfig.java: api.stripe.com"
+        ],
+        "existing_tests_preserved": true,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "or       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)\n2026-11-17T17:36:37.261Z  INFO 1623 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T17:36:38.112Z  INFO 1623 --- [           main] c.s.o.PayShiftHiddenWiringCheckTest      : Started PayShiftHiddenWiringCheckTest in 3.6 seconds (process running for 6.548)\n2026-11-17T17:36:38.614Z  INFO 1623 --- [ionShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T17:36:38.616Z  INFO 1623 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...\n2026-11-17T17:36:38.617Z  INFO 1623 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.\n\nWARNING: A Java agent has been loaded dynamically (/root/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar)\nWARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning\nWARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information\nWARNING: Dynamic loading of agents will be disallowed by default in a future release\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n",
+        "integration_is_real": true
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 5,
+        "prompt_tokens": 36449,
+        "completion_tokens": 1906,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 1512,
+            "completion_tokens": 235
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 6867,
+            "completion_tokens": 530
+          },
+          "generate_code": {
+            "calls": 3,
+            "prompt_tokens": 28070,
+            "completion_tokens": 1141
+          }
+        }
+      },
+      "duration_seconds": 38.8,
+      "workspace": "/app/workspaces/eval-razorpay-rest-orders-2-ff53cf/modified"
+    },
+    {
+      "case": "multi-psp-router",
+      "repeat": 1,
+      "run_id": "eval-multi-psp-router-1-2969a8",
+      "status": "VERIFIED",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "stripe",
+        "paypal"
+      ],
+      "expected_providers": [
+        "paypal",
+        "stripe"
+      ],
+      "files_created": [
+        "src/main/java/com/payments/router/config/RazorpayClientConfig.java",
+        "src/main/java/com/payments/router/provider/RazorpayProvider.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 1,
+        "build": 0
+      },
+      "static_findings_final": [
+        "WARNING:stub_method"
+      ],
+      "tests": {
+        "tests_run": 4,
+        "failures": 0,
+        "errors": 0
+      },
+      "hidden": {
+        "context_has_provider_bean": true,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/payments/router/provider/RazorpayProvider.java: api.razorpay.com"
+        ],
+        "existing_tests_preserved": true,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)\n2026-11-17T17:37:23.016Z  INFO 1916 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T17:37:24.109Z  INFO 1916 --- [           main] c.p.r.PayShiftHiddenWiringCheckTest      : Started PayShiftHiddenWiringCheckTest in 3.937 seconds (process running for 6.821)\n2026-11-17T17:37:24.953Z  INFO 1916 --- [ionShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T17:37:24.956Z  INFO 1916 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...\n2026-11-17T17:37:24.959Z  INFO 1916 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.\n\nWARNING: A Java agent has been loaded dynamically (/root/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar)\nWARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning\nWARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information\nWARNING: Dynamic loading of agents will be disallowed by default in a future release\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n",
+        "integration_is_real": true
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 6,
+        "prompt_tokens": 16567,
+        "completion_tokens": 2056,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 2202,
+            "completion_tokens": 282
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 3090,
+            "completion_tokens": 472
+          },
+          "generate_code": {
+            "calls": 2,
+            "prompt_tokens": 8120,
+            "completion_tokens": 508
+          },
+          "diagnose_failures": {
+            "calls": 1,
+            "prompt_tokens": 1255,
+            "completion_tokens": 122
+          },
+          "repair_code": {
+            "calls": 1,
+            "prompt_tokens": 1900,
+            "completion_tokens": 672
+          }
+        }
+      },
+      "duration_seconds": 38.2,
+      "workspace": "/app/workspaces/eval-multi-psp-router-1-2969a8/modified"
+    },
+    {
+      "case": "multi-psp-router",
+      "repeat": 2,
+      "run_id": "eval-multi-psp-router-2-9dbfd4",
+      "status": "VERIFIED",
+      "error": null,
+      "blocker_reason": null,
+      "detected_providers": [
+        "stripe",
+        "paypal"
+      ],
+      "expected_providers": [
+        "paypal",
+        "stripe"
+      ],
+      "files_created": [
+        "src/main/java/com/payments/router/config/RazorpayClientConfig.java",
+        "src/main/java/com/payments/router/provider/RazorpayProvider.java"
+      ],
+      "files_modified": [],
+      "repairs": {
+        "static": 1,
+        "build": 1
+      },
+      "static_findings_final": [],
+      "tests": {
+        "tests_run": 4,
+        "failures": 0,
+        "errors": 0
+      },
+      "hidden": {
+        "context_has_provider_bean": true,
+        "provider_evidence_in_code": true,
+        "evidence_found": [
+          "src/main/java/com/payments/router/provider/RazorpayProvider.java: api.razorpay.com"
+        ],
+        "existing_tests_preserved": true,
+        "new_provider_test_files": [],
+        "hidden_test_output_tail": "       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)\n2026-11-17T17:38:29.339Z  INFO 2271 --- [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T17:38:30.277Z  INFO 2271 --- [           main] c.p.r.PayShiftHiddenWiringCheckTest      : Started PayShiftHiddenWiringCheckTest in 4.608 seconds (process running for 8.732)\n2026-11-17T17:38:30.856Z  INFO 2271 --- [ionShutdownHook] j.LocalContainerEntityManagerFactoryBean : Closing JPA EntityManagerFactory for persistence unit 'default'\n2026-11-17T17:38:30.859Z  INFO 2271 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown initiated...\n2026-11-17T17:38:30.863Z  INFO 2271 --- [ionShutdownHook] com.zaxxer.hikari.HikariDataSource       : HikariPool-1 - Shutdown completed.\n\nWARNING: A Java agent has been loaded dynamically (/root/.m2/repository/net/bytebuddy/byte-buddy-agent/1.14.19/byte-buddy-agent-1.14.19.jar)\nWARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning\nWARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information\nWARNING: Dynamic loading of agents will be disallowed by default in a future release\nOpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended\n",
+        "integration_is_real": true
+      },
+      "false_verified": false,
+      "llm_usage": {
+        "calls": 8,
+        "prompt_tokens": 19782,
+        "completion_tokens": 3078,
+        "models": [
+          "gpt-4o"
+        ],
+        "by_step": {
+          "understand_architecture": {
+            "calls": 1,
+            "prompt_tokens": 2202,
+            "completion_tokens": 304
+          },
+          "create_plan": {
+            "calls": 1,
+            "prompt_tokens": 3112,
+            "completion_tokens": 481
+          },
+          "generate_code": {
+            "calls": 2,
+            "prompt_tokens": 8260,
+            "completion_tokens": 560
+          },
+          "diagnose_failures": {
+            "calls": 2,
+            "prompt_tokens": 2821,
+            "completion_tokens": 204
+          },
+          "repair_code": {
+            "calls": 2,
+            "prompt_tokens": 3387,
+            "completion_tokens": 1529
+          }
+        }
+      },
+      "duration_seconds": 56.5,
+      "workspace": "/app/workspaces/eval-multi-psp-router-2-9dbfd4/modified"
+    }
+  ]
+}

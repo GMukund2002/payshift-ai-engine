@@ -32,13 +32,15 @@ requires a target-provider bean that something actually depends on.
 | 2 | 8 | 2 | 1 (12.5%) | 1 of 2 | 0 |
 | 3 | 8 | 4 | 3 (37.5%) | 1 of 4 | 0 |
 | 4 | 5 completed\* | 5 | **5 (100%)** | **0 of 5** | 0 |
+| 5 | 8 | 6 | 6 (75%) | 0 of 6 | 0 |
 
 \* Round 4 stopped when the OpenAI account ran out of credits; 3 runs never
 executed (`multi-psp-router` x2, one `razorpay-rest-orders`) and are not counted.
 Every round's false VERIFIED was caught by the hidden checks, root-caused, and
 turned into a deterministic static check plus a regression test before the
-next round (see `docs/evaluation.md`). **Read these as directional**: 25 runs
-in total, 4 apps, one model. Raw results: `ai-engine/evaluation/live_results/`.
+next round (see `docs/evaluation.md`). Since the last fixes (rounds 4-5): 11 of 13
+runs produced a real integration and none was falsely VERIFIED. **Read these as
+directional**: 33 runs in total, 4 apps, one model. Raw results: `ai-engine/evaluation/live_results/`.
 
 What has held in every run so far: no existing test was ever broken, provider
 detection was correct in every run, and every run stayed within its repair budget.
@@ -121,9 +123,10 @@ compiles and tests the customer's code inside the container.
 
 ## Known limitations
 
-- **The sample is small.** 25 live runs over 4 apps with one model; the round-4
-  numbers come from 5 runs and `multi-psp-router` was not re-measured after the
-  last fixes. More rounds (and more apps) are needed before quoting a rate.
+- **The sample is small.** 33 live runs over 4 apps with one model; the
+  post-fix figure (11 of 13 real, 0 false VERIFIED) needs more rounds and more
+  apps before it is quoted as a rate. The 2 round-5 failures exhausted their
+  repair budgets and have not been root-caused yet.
 - **Hidden checks prove wiring, not correctness against the provider.** A
   change that boots, is reachable and calls the provider's API host can still
   send a wrong request body. Provider contract tests (recorded sandbox

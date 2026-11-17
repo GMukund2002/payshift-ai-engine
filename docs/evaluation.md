@@ -38,15 +38,16 @@ the number a buyer cares about most; the target is 0.
 | 2 | 8 | 2 | 1 | 1 | New classes outside the component-scanned package (never registered as beans). Generated code calling methods that don't exist on existing types (never shown their source). Repeated mis-import of `RestTemplateBuilder`. |
 | 3 | 8 | 4 | 3 | 1 | A repair removed `@Component`, leaving an implementation nothing created. Plans without an entry point. Repair budgets exhausted while still converging. |
 | 4 | 5\* | 5 | 5 | 0 | LLM quota exhaustion crashed the graph instead of blocking (fixed); scripted tests were silently spending real embedding quota (fixed). |
+| 5 | 8 | 6 | 6 | 0 | First full round after all fixes, all 4 apps (both `multi-psp-router` runs real). 2 runs exhausted their repair budgets (`merchant-app`: 3 static repairs; `razorpay-rest-orders`: 3 static + 3 build); not yet root-caused. |
 
 \* 3 runs of round 4 never executed (OpenAI credits ran out); they are excluded.
 
 Never observed in any run: an existing test broken by a VERIFIED change, a
 provider mis-detected, or a run exceeding its repair budget.
 
-Caveats: 25 runs, 4 apps, one model. `multi-psp-router` has not been measured
-since the last two rounds of fixes. Rates are directional until more runs and
-more apps exist. Raw per-run JSON: `ai-engine/evaluation/live_results/`.
+Caveats: 33 runs, 4 apps, one model. Since the last fixes (rounds 4-5), 11 of 13
+runs were real integrations with no false VERIFIED. Rates are directional until
+more runs and more apps exist. Raw per-run JSON: `ai-engine/evaluation/live_results/`.
 
 ## Deterministic benchmark (`make benchmark`, `ai-engine/evaluation/benchmark.py`)
 
